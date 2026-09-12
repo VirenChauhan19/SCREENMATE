@@ -286,10 +286,23 @@ Three classes of field are surfaced but never filled: **file uploads** (a resume
 has to come from your machine), **consent checkboxes**, and anything matching a
 protected topic.
 
-Honest limits: this is verified against faithful fixtures, not live employer
-sites. A portal that renders inputs into a closed shadow root, or draws its form
-on a canvas, will not be readable. When a page defeats the scanner it says so
-rather than guessing.
+Verified against live employer postings as well as fixtures. `npm run probe:real`
+opens real application pages and reports what the scanner sees — read-only: it
+never writes a field, never clicks a navigation control, never submits.
+
+A representative run:
+
+| Live posting | Fields | Locked as sensitive |
+|---|---|---|
+| Cloudflare (Greenhouse) | 25 | sponsorship, gender, ethnicity, veteran, disability, start date |
+| Instrumentl (Lever) | 11 | work authorization, sponsorship |
+| Metabase (Lever) | 12 | none present on that form |
+| Supermove (Lever) | 11 | none present on that form |
+
+Limits worth stating: a portal that renders inputs into a *closed* shadow root,
+or draws its form on a canvas, is unreadable. Expired or listing-only pages
+return too few fields, and the probe says so rather than pretending. When a page
+defeats the scanner it reports that instead of guessing.
 
 ### Multi-step applications
 

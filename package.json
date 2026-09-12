@@ -20,7 +20,8 @@
     "recipient:test": "node scripts/recipient-install.js",
     "cv:e2e": "node scripts/cv-popup-e2e.js",
     "ui:e2e": "node scripts/ui-controls-e2e.js",
-    "persist:e2e": "node scripts/persistence-e2e.js"
+    "persist:e2e": "node scripts/persistence-e2e.js",
+    "probe:real": "node scripts/real-sites-probe.js"
   },
   "dependencies": {
     "fflate": "^0.8.3",

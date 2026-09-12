@@ -58,15 +58,72 @@
     el.getAttribute?.("data-qa") ||
     "";
 
+  /** Text that decorates a label rather than naming it. */
+  const NOISE = [
+    /no location found[\s\S]*$/i,
+    /try entering a different/i,
+    /\(optional\)\s*$/i,
+    /this field is required[\s\S]*$/i,
+    /please enter[\s\S]*$/i,
+    /must be a valid[\s\S]*$/i,
+  ];
+
+  /**
+   * Reads an element's label text without the scaffolding around it.
+   *
+   * Real forms hang required markers and validation messages inside the same
+   * node as the label — Lever renders `<span class="required">✱</span>` inline,
+   * so a naive textContent yields "Full name✱" or, worse, "Current location ✱No
+   * location found. Try entering a different…". Both break topic matching, and a
+   * mangled label is how a sensitive question gets classified safe.
+   */
+  /** Strips decoration from an already-extracted string. */
+  function tidyLabel(raw) {
+    let text = cleanText(raw);
+    for (const re of NOISE) text = text.replace(re, "");
+    return text
+      .replace(/[*✱✽★†‡]+/g, " ")
+      .replace(/\s{2,}/g, " ")
+      .replace(/[\s:·|-]+$/, "")
+      .trim();
+  }
+
+  function labelText(node) {
+    if (!node) return "";
+    const clone = node.cloneNode(true);
+    clone
+      .querySelectorAll(
+        "input, select, textarea, button, " +
+          "[class*=required], [class*=Required], abbr, " +
+          "[class*=error], [class*=Error], [class*=hint], [class*=help], " +
+          "[role=alert], [aria-live], [class*=field], [class*=Field]",
+      )
+      .forEach((n) => n.remove());
+
+    return tidyLabel(clone.textContent);
+  }
+
+  const LABEL_SELECTOR =
+    "label, legend, [data-automation-id*=label], .label, [class*=label], " +
+    "[class*=Label], [class*=question-text], h1, h2, h3, h4, h5, h6";
+
+  /** True when this node names a field rather than being part of one. */
+  function isLabelCandidate(node, el) {
+    if (!node || node.contains(el)) return false;
+    if (node.querySelector("input, select, textarea")) return false;
+    const t = labelText(node);
+    return Boolean(t) && t.length > 1 && t.length < 220;
+  }
+
   function labelFor(el) {
-    const byAria = cleanText(el.getAttribute("aria-label"));
+    const byAria = tidyLabel(el.getAttribute("aria-label"));
     if (byAria) return byAria;
 
     const labelledBy = el.getAttribute("aria-labelledby");
     if (labelledBy) {
       const text = labelledBy
         .split(/\s+/)
-        .map((id) => cleanText(document.getElementById(id)?.textContent))
+        .map((id) => labelText(document.getElementById(id)))
         .filter(Boolean)
         .join(" ");
       if (text) return text;
@@ -75,34 +132,28 @@
     if (el.id) {
       const escaped =
         window.CSS && CSS.escape ? CSS.escape(el.id) : el.id.replace(/"/g, '\\"');
-      const text = cleanText(
-        document.querySelector(`label[for="${escaped}"]`)?.textContent,
-      );
+      const text = labelText(document.querySelector(`label[for="${escaped}"]`));
       if (text) return text;
     }
 
     const wrapping = el.closest("label");
     if (wrapping) {
-      const clone = wrapping.cloneNode(true);
-      clone
-        .querySelectorAll("input,select,textarea,button")
-        .forEach((n) => n.remove());
-      const text = cleanText(clone.textContent);
+      // Prefer the inner label node, which excludes the field and its errors.
+      const inner = [...wrapping.querySelectorAll("[class*=label], [class*=Label]")]
+        .find((n) => isLabelCandidate(n, el));
+      const text = inner ? labelText(inner) : labelText(wrapping);
       if (text) return text;
     }
 
-    // Workday wraps each question in a labelled group.
-    const group = el.closest(
-      "[data-automation-id*=formField], [class*=field], [class*=form-group], " +
-        "[class*=question], [role=group], fieldset, li, div",
-    );
-    if (group) {
-      const candidate = group.querySelector(
-        "label, legend, [data-automation-id*=label], .label, [class*=label], " +
-          "h1, h2, h3, h4, h5, h6",
+    // Walk up. closest() stops at the first container that matches, which on a
+    // real form is often the inner field wrapper with no label inside it.
+    let node = el.parentElement;
+    for (let depth = 0; depth < 8 && node; depth++, node = node.parentElement) {
+      const candidate = [...node.querySelectorAll(LABEL_SELECTOR)].find((n) =>
+        isLabelCandidate(n, el),
       );
-      const text = cleanText(candidate?.textContent);
-      if (text && text.length < 220) return text;
+      if (candidate) return labelText(candidate);
+      if (node.tagName === "FORM" || node.tagName === "BODY") break;
     }
 
     return (
@@ -122,14 +173,14 @@
    * is not just cosmetic: it is how a sensitive question gets classified safe.
    */
   function groupLabelFor(el) {
-    const byAria = cleanText(el.getAttribute("aria-label"));
+    const byAria = tidyLabel(el.getAttribute("aria-label"));
     if (byAria) return byAria;
 
     const labelledBy = el.getAttribute("aria-labelledby");
     if (labelledBy) {
       const text = labelledBy
         .split(/\s+/)
-        .map((id) => cleanText(document.getElementById(id)?.textContent))
+        .map((id) => labelText(document.getElementById(id)))
         .filter(Boolean)
         .join(" ");
       if (text) return text;
@@ -147,16 +198,10 @@
       );
       if (siblings < 2 && !isWrapper) continue;
 
-      const candidates = node.querySelectorAll(
-        "legend, label, .label, [class*=label], [class*=Label], h1, h2, h3, h4, h5, h6",
+      const candidate = [...node.querySelectorAll(LABEL_SELECTOR)].find((n) =>
+        isLabelCandidate(n, el),
       );
-      for (const c of candidates) {
-        // A node containing a control is an option's own label, not the question.
-        if (c.querySelector("input, select, textarea")) continue;
-        if (c.contains(el)) continue;
-        const text = cleanText(c.textContent);
-        if (text && text.length > 2 && text.length < 220) return text;
-      }
+      if (candidate) return labelText(candidate);
     }
     return labelFor(el);
   }
