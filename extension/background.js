@@ -29,13 +29,59 @@ const DEFAULT_PROFILE = {
   ],
 };
 
-chrome.runtime.onInstalled.addListener(async () => {
-  const stored = await chrome.storage.local.get(["profile", "backendUrl"]);
+/**
+ * A build packaged for someone else carries config.json, so the recipient does
+ * not have to type a URL and key before anything works. It is absent from a
+ * repo checkout, where localhost is the right default.
+ */
+async function bundledConfig() {
+  try {
+    const res = await fetch(chrome.runtime.getURL("config.json"));
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
+const isLocal = (url) => !url || /localhost|127\.0\.0\.1/.test(url);
+
+/**
+ * Seeds settings on install, and repairs them on update.
+ *
+ * The repair matters: an install that already saved `localhost` keeps pointing
+ * at a server that is not running, and no amount of re-seeding fixes it while
+ * the check is "only if unset". A stored localhost URL was never a deliberate
+ * choice, so a bundled backend supersedes it. A URL the user actually typed is
+ * left alone.
+ */
+async function applyConfig() {
+  const stored = await chrome.storage.local.get([
+    "profile",
+    "backendUrl",
+    "apiKey",
+  ]);
+  const bundled = await bundledConfig();
   const patch = {};
-  if (!stored.profile) patch.profile = DEFAULT_PROFILE;
-  if (!stored.backendUrl) patch.backendUrl = DEFAULT_BACKEND;
+
+  if (!stored.profile) patch.profile = bundled?.profile || DEFAULT_PROFILE;
+
+  if (bundled?.backendUrl && isLocal(stored.backendUrl)) {
+    patch.backendUrl = bundled.backendUrl;
+  } else if (!stored.backendUrl) {
+    patch.backendUrl = DEFAULT_BACKEND;
+  }
+
+  if (bundled?.apiKey && !stored.apiKey) patch.apiKey = bundled.apiKey;
+
   if (Object.keys(patch).length) await chrome.storage.local.set(patch);
-});
+  return patch;
+}
+
+chrome.runtime.onInstalled.addListener(applyConfig);
+// Also on browser start, so an extension left pointing at a dead localhost from
+// an earlier session repairs itself without the user touching anything.
+chrome.runtime.onStartup?.addListener(applyConfig);
 
 async function backendConfig() {
   const { backendUrl, apiKey } = await chrome.storage.local.get([
@@ -108,40 +154,6 @@ const ROUTES = {
   research: "/api/research",
 };
 
-/**
- * CV upload needs multipart rather than JSON, so it does not go through
- * callApi. The bytes are sent straight through and never stored by the
- * extension — only the extracted profile comes back.
- */
-async function parseCv({ name, type, dataUrl }) {
-  const { base, apiKey } = await backendConfig();
-  try {
-    const blob = await (await fetch(dataUrl)).blob();
-    const form = new FormData();
-    form.append("cv", new File([blob], name, { type }));
-
-    const headers = {};
-    if (apiKey) headers["x-screenmate-key"] = apiKey;
-
-    const res = await fetch(`${base}/api/parse-cv`, {
-      method: "POST",
-      headers,
-      body: form,
-    });
-    const data = await res.json().catch(() => null);
-    if (!res.ok) {
-      return {
-        ok: false,
-        error: data?.error || `Backend returned ${res.status}`,
-        reason: data?.reason,
-      };
-    }
-    return { ok: true, data };
-  } catch {
-    return { ok: false, error: "Could not reach the backend to read that CV." };
-  }
-}
-
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (msg?.type === "screenmate:api") {
     const path = ROUTES[msg.route];
@@ -153,8 +165,19 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     return true; // keep the channel open for the async reply
   }
 
-  if (msg?.type === "screenmate:parseCv") {
-    parseCv(msg.file).then(sendResponse);
+  // CV upload is deliberately NOT proxied here: an MV3 service worker cannot
+  // fetch a data: URL, and multipart has no reason to make the extra hop. The
+  // popup is an extension page with the same host permissions, so it posts the
+  // File straight to the backend.
+  // The popup asks for this on open, so a stale localhost is repaired the
+  // moment someone looks at the extension rather than at the next restart.
+  if (msg?.type === "screenmate:applyConfig") {
+    applyConfig().then(sendResponse);
+    return true;
+  }
+
+  if (msg?.type === "screenmate:getBackend") {
+    backendConfig().then(sendResponse);
     return true;
   }
 

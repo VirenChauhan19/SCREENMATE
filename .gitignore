@@ -10,3 +10,4 @@ next-env.d.ts
 fixtures/*-run.png
 dist
 .vercel
+extension/config.json

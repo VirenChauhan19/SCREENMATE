@@ -16,7 +16,11 @@
     "portals:writes": "node scripts/portal-writes.js",
     "portals:iframe": "node scripts/portal-run-iframe.js",
     "package:ext": "node scripts/package-extension.js",
-    "deploy": "vercel --prod"
+    "deploy": "vercel --prod",
+    "recipient:test": "node scripts/recipient-install.js",
+    "cv:e2e": "node scripts/cv-popup-e2e.js",
+    "ui:e2e": "node scripts/ui-controls-e2e.js",
+    "persist:e2e": "node scripts/persistence-e2e.js"
   },
   "dependencies": {
     "fflate": "^0.8.3",

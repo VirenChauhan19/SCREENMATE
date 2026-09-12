@@ -302,6 +302,49 @@ submit / apply now / finish / confirm and… / agree and… is refused, and a bu
 reading "Submit and continue" is refused too. When no Next button remains, the
 run stops and hands you the submit control explicitly.
 
+### Pointing a checkout at the deployment
+
+`extension/config.json` (gitignored, so the key never lands in the repo) sets the
+backend for an unpacked checkout:
+
+```json
+{ "backendUrl": "https://your-app.vercel.app", "apiKey": "sm_..." }
+```
+
+Without it the extension defaults to `localhost:3000` and reports it cannot
+reach the backend — correct on a dev machine, useless anywhere else.
+
+An install that already saved `localhost` is repaired rather than left broken:
+a stored localhost URL was never a deliberate choice, so a bundled backend
+supersedes it. That happens when the popup opens, not only at browser restart,
+so clicking the icon is enough to fix it. A URL you typed yourself is left alone.
+
+### Giving it to someone else
+
+An unpacked checkout defaults to `localhost:3000`, which on a stranger's laptop
+is nothing. Package a build that carries its own backend instead:
+
+```bash
+npm run package:ext --   --backend=https://your-app.vercel.app   --key=sm_your_access_key
+```
+
+That writes `dist/screenmate-<version>.zip` containing a `config.json` the
+service worker reads on install. The recipient unzips it, loads it unpacked, and
+is connected — no URL to type, no key to paste. `npm run recipient:test` proves
+that: it unpacks the zip into a clean directory, installs it into a fresh Chrome
+profile, changes nothing, and asserts the popup reaches the hosted API.
+
+Packaging refuses a localhost `--backend`, because that failure only shows up on
+the other person's machine.
+
+**The zip contains your access key.** Anyone holding the file can spend your
+OpenRouter and Exa credits. Hand it to people directly, do not post it, and
+rotate `SCREENMATE_API_KEY` when you want to cut a build off. Omit `--key` to
+make recipients paste their own.
+
+For anything wider than handing out zips, the Chrome Web Store is the real
+answer: a developer account, a one-off fee, and review time measured in days.
+
 ### Importing your CV
 
 The popup reads a **PDF, DOCX or plain-text** CV and fills your profile from it.
@@ -312,6 +355,11 @@ It is a parser, not a writer: values are copied verbatim, and anything the CV
 does not state comes back as **missing** rather than invented — these values get
 typed into real applications, so a wrong one is worse than a blank one. Nothing
 is saved until you see a before/after diff and apply it.
+
+**Applying an import saves it.** There is no second button to forget, and the
+popup then shows which CV the profile came from and when — so you are never left
+wondering whether to upload it again. Your profile lives in `chrome.storage`
+on that device; the CV itself is never stored, only the fields extracted from it.
 
 A scanned, image-only PDF has no text layer, and the popup says so instead of
 returning an empty profile.
