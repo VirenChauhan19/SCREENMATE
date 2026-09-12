@@ -1,0 +1,157 @@
+@import "tailwindcss";
+
+@theme {
+  --color-ink-950: #0a0a0c;
+  --color-ink-900: #0e0e11;
+  --color-ink-850: #131317;
+  --color-ink-800: #17171c;
+  --color-ink-750: #1c1c22;
+  --color-ink-700: #23232b;
+  --color-ink-600: #2e2e38;
+
+  --color-mist-600: #55555f;
+  --color-mist-500: #6b6b78;
+  --color-mist-400: #8a8a98;
+  --color-mist-300: #a8a8b5;
+  --color-mist-200: #d2d2da;
+  --color-mist-100: #eeeef2;
+
+  --color-accent-500: #7c6cf5;
+  --color-accent-400: #8f82f7;
+  --color-accent-300: #ada3f9;
+  --color-accent-dim: #2a2545;
+
+  --color-good-400: #58b58a;
+  --color-good-dim: #172a22;
+
+  --color-warn-400: #d8a350;
+  --color-warn-dim: #2e2415;
+
+  --color-bad-400: #d4736b;
+
+  --font-sans: ui-sans-serif, -apple-system, "Segoe UI", Inter, system-ui, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "Cascadia Code", Menlo, monospace;
+}
+
+html {
+  color-scheme: dark;
+}
+
+body {
+  background-color: var(--color-ink-950);
+  color: var(--color-mist-200);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Uppercase micro-labels used throughout the shell. */
+@utility label-xs {
+  font-size: 10px;
+  line-height: 1;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+
+@utility field-base {
+  width: 100%;
+  border-radius: 8px;
+  border-width: 1px;
+  background-color: var(--color-ink-850);
+  border-color: var(--color-ink-700);
+  padding: 9px 12px;
+  font-size: 13.5px;
+  color: var(--color-mist-100);
+  outline: none;
+  transition:
+    border-color 180ms ease,
+    box-shadow 180ms ease,
+    background-color 180ms ease;
+}
+
+.field-base::placeholder {
+  color: var(--color-mist-500);
+}
+
+.field-base:focus {
+  border-color: var(--color-accent-500);
+  box-shadow: 0 0 0 3px rgb(124 108 245 / 0.16);
+}
+
+button:focus-visible,
+a:focus-visible {
+  outline: 2px solid var(--color-accent-500);
+  outline-offset: 2px;
+  border-radius: 8px;
+}
+
+/* Brief highlight when the agent writes a field. */
+@keyframes agent-write {
+  0% {
+    border-color: var(--color-accent-400);
+    box-shadow: 0 0 0 3px rgb(124 108 245 / 0.28);
+  }
+  100% {
+    border-color: var(--color-ink-700);
+    box-shadow: 0 0 0 0 rgb(124 108 245 / 0);
+  }
+}
+
+.agent-write {
+  animation: agent-write 1.6s ease-out;
+}
+
+@keyframes fade-rise {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.fade-rise {
+  animation: fade-rise 260ms ease-out both;
+}
+
+@keyframes pulse-dot {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.pulse-dot {
+  animation: pulse-dot 1.8s ease-in-out infinite;
+}
+
+::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-ink-700);
+  border-radius: 99px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-ink-600);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agent-write,
+  .fade-rise,
+  .pulse-dot {
+    animation: none;
+  }
+}
