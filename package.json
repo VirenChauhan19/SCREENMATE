@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit",
     "e2e": "tsc scripts/e2e.ts --outDir .tsbuild --module commonjs --target ES2022 --moduleResolution node --skipLibCheck && node .tsbuild/scripts/e2e.js",
     "ext:e2e": "node scripts/ext-e2e.js",
-    "fixture:serve": "node -e \"const h=require('http'),f=require('fs'),p=require('path');h.createServer((q,r)=>{const fp=p.join('fixtures',q.url==='/'?'apply.html':q.url);f.readFile(fp,(e,d)=>e?(r.statusCode=404,r.end()):r.end(d))}).listen(8099,()=>console.log('fixture on http://localhost:8099/apply.html'))\""
+    "fixture:serve": "node -e \"const h=require('http'),f=require('fs'),p=require('path');h.createServer((q,r)=>{const fp=p.join('fixtures',q.url==='/'?'apply.html':q.url);f.readFile(fp,(e,d)=>e?(r.statusCode=404,r.end()):r.end(d))}).listen(8099,()=>console.log('fixture on http://localhost:8099/apply.html'))\"",
+    "ext:workday": "node scripts/ext-workday-e2e.js"
   },
   "dependencies": {
     "lucide-react": "^0.468.0",

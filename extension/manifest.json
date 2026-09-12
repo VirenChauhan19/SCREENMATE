@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "SCREENMATE",
-  "version": "0.3.0",
-  "description": "A context-aware AI agent that reads the form you're on, fills what it safely can, verifies every write, and stops for decisions only you can make.",
+  "version": "0.4.0",
+  "description": "A context-aware AI agent that reads the application form you're on, fills what it safely can across every step, verifies each write, stops for decisions only you can make, and never presses submit.",
   "permissions": [
     "storage",
     "activeTab",
@@ -46,6 +46,8 @@
       "js": [
         "content/scan.js",
         "content/act.js",
+        "content/nav.js",
+        "content/prefs.js",
         "content/panel.js",
         "content/main.js"
       ],

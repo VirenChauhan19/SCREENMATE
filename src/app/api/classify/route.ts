@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { isSensitiveTopic, levelFor } from "@/lib/policy";
+import { isSensitiveTopic, levelFor, topicFor } from "@/lib/policy";
 
 export const runtime = "nodejs";
 
@@ -77,6 +77,8 @@ export async function POST(request: Request) {
       sensitive,
       sensitiveReason: sensitive ? reasonFor(f.id, f.label) : undefined,
       flaggedByTopic: isSensitiveTopic(f.id, f.label),
+      // Lets the extension answer from a standing preference the user already set.
+      topic: topicFor(f.id, f.label),
     };
   });
 

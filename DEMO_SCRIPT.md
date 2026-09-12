@@ -8,6 +8,8 @@
 - [ ] `npm run dev` is running (the extension needs it for agent, research, policy)
 - [ ] Extension loaded: `chrome://extensions` → Developer mode → Load unpacked → `extension/`
 - [ ] Toolbar icon → your profile is filled in → **Backend reachable** shows green
+- [ ] **Standing answers set** — open the panel once and answer the setup card.
+      Do this BEFORE the demo; you do not want to fill it on stage.
 - [ ] A real job application page open in tab 1 — pick one and **test it before you
       present**. Greenhouse, Lever and Ashby forms scan reliably; Workday does not.
 - [ ] `http://localhost:3000` open in tab 2 as the fallback
@@ -108,6 +110,24 @@ violet highlight.
 
 ---
 
+## New beat · It walks the whole wizard
+
+**Point at:** the step pips in the panel and the page changing under it.
+
+> "Real applications are multi-step. It fills a step, verifies every write, clicks
+> Next, re-reads the new page, and keeps going."
+
+> "It set that dropdown too — and that's not a `<select>`. It's a button that opens
+> a floating listbox, which is what Workday and most modern ATS systems use. You
+> can't write to those. You have to operate them."
+
+**Point at:** the sensitive fields filling with *your* answers.
+
+> "These come from standing answers I set once. It's still not deciding anything —
+> it's transcribing a decision I already made, and it says so on every line."
+
+---
+
 ## 1:25 – 1:40 · Stopping
 
 **Point at:** the amber `User decision required` card, and at the sponsorship,
@@ -124,6 +144,12 @@ salary and veteran-status fields still sitting empty on the page.
 > layer. I tried to jailbreak it — I put an instruction in the job description telling
 > it that it was authorized to answer automatically. It refused, and the server would
 > have rewritten the action anyway."
+
+**Point at:** the Submit button, still sitting there untouched.
+
+> "And this is the line I care most about. It will click Next all day. It will never
+> click Submit. That's not the model's judgement — it's a hard refusal in the
+> navigation code, because a submitted application can't be taken back."
 
 ---
 
@@ -182,6 +208,8 @@ salary and veteran-status fields still sitting empty on the page.
 | Extension panel never appears | Click the toolbar icon → **Open on this page**. Auto-detect is deliberately conservative. |
 | `Cannot classify fields` | The backend is down. `npm run dev`, then **Rescan page**. |
 | Live site parses badly | Switch to the portal tab. Same agent, same script. |
+| Wizard won't advance | Usually a required field the site blocks on. The panel says so. Fill it by hand and hit Run again. |
+| It asks a question you already set | Your standing answer had no match in that site's options. Answer it and tick "Remember" — it learns the new wording. |
 
 ## Questions you'll probably get
 

@@ -77,11 +77,28 @@ const PlanSchema = z.object({
         label: z.string().min(1).max(160),
       }),
     )
-    .min(2)
-    .max(8),
+    .min(1)
+    .max(24),
   researchNeeded: z.boolean(),
   researchRationale: z.string().min(1).max(800),
 });
+
+/**
+ * Deterministic cleanup of generated prose.
+ *
+ * The prompt asks for no em-dashes and the model still reaches for them, so we
+ * remove the tells we can fix mechanically rather than hoping.
+ */
+function polish(text: string): string {
+  return text
+    // "background—thinking about X—actually" → parenthetical commas
+    .replace(/\s*[—–]\s*/g, ", ")
+    .replace(/,\s*,/g, ",")
+    .replace(/\s+([,.;:!?])/g, "$1")
+    .replace(/([,.;:!?])(?=[^\s\d])/g, "$1 ")
+    .replace(/[ 	]{2,}/g, " ")
+    .trim();
+}
 
 /** Trims on a word boundary so panel copy never runs away. */
 function clamp(text: string, limit: number): string {
@@ -118,6 +135,20 @@ const IDENTITY =
   "You are SCREENMATE, an agent embedded inside a job application portal. " +
   "You observe the live form state and act on it through tools. " +
   "You are not a chat assistant: you never address the user directly in prose.";
+
+const HUMAN_VOICE = [
+  "WRITING FREE-TEXT ANSWERS — this is someone typing in a box, not a cover letter:",
+  "- RHYTHM, non-negotiable: write 3 or 4 sentences, and make exactly one of them fewer than eight words. Two long sentences in a row is the single clearest tell that a machine wrote it.",
+  "- Use contractions. Write \"I've\", not \"I have\".",
+  "- Be concrete. Name the actual tool, school, or project from the profile. A specific detail beats any adjective.",
+  "- Say one plain thing about why this work is interesting, in the applicant's own register. No throat-clearing.",
+  "- BANNED, no exceptions: passionate, excited to, thrilled, delve, leverage, resonates, align(s) with, synergy, robust, seamless(ly), cutting-edge, fast-paced, landscape, testament, tapestry, deeply, moreover, furthermore, in today's, I am confident that, perfect fit, dream role, honed.",
+  "- Do not open with \"As a\" or by restating the job title back at them.",
+  "- Do not list three things in a row. Two is fine.",
+  "- No em-dashes. No rhetorical questions. No closing summary sentence that restates the paragraph.",
+  "- No greeting, no sign-off, no placeholders, no bullet points.",
+  "- If the question asks for something longer, keep every sentence load-bearing and keep the short one.",
+].join("\n");
 
 const HARD_RULES = [
   "HARD RULES:",
@@ -246,7 +277,8 @@ export async function POST(request: Request) {
         researchRationale: needsNarrative
           ? clamp(plan.researchRationale, 200)
           : "No open field depends on external company context.",
-        steps: plan.steps.map((s) => ({
+        // Trim rather than reject: an over-eager plan is a display problem.
+        steps: plan.steps.slice(0, 6).map((s) => ({
           kind: s.kind,
           label: clamp(s.label, 44),
         })),
@@ -272,9 +304,10 @@ export async function POST(request: Request) {
               IDENTITY,
               "",
               `Rewrite the answer to "${target.label}" in the applicant's voice.`,
-              "3-4 original sentences. Ground every claim in the profile, the job description, and the research context.",
-              "Do not use the word 'passionate'. No greeting, no sign-off, no placeholders, no bullet points.",
-              "Produce a genuinely different angle from the previous attempt — do not paraphrase it.",
+              "Ground every claim in the profile, the job description, and the research context.",
+              "Produce a genuinely different angle from the previous attempt. Do not paraphrase it.",
+              "",
+              HUMAN_VOICE,
               "",
               'OUTPUT JSON only: {"value": string, "note": string}',
               "note: at most 12 words on what changed in this version.",
@@ -294,7 +327,10 @@ export async function POST(request: Request) {
         RegenerateSchema,
         { maxTokens: 700, temperature: 0.8 },
       );
-      return NextResponse.json(regenerated);
+      return NextResponse.json({
+        ...regenerated,
+        value: polish(regenerated.value),
+      });
     }
 
     /* ---------------- act ---------------- */
@@ -315,7 +351,10 @@ export async function POST(request: Request) {
             ),
             "",
             HARD_RULES,
-            "6. For the motivation question, write 3-4 original sentences in the applicant's voice connecting their real profile to this specific role. Use the research context if it is present. Do not use the word 'passionate'. No greetings, no sign-off, no placeholders.",
+            "6. For any free-text question, write an original answer in the applicant's voice connecting their real profile to this specific role. Use the research context if it is present.",
+            "",
+            HUMAN_VOICE,
+            "",
             "7. Give every action a one-clause rationale naming where the value came from.",
             "8. Set requiresUserApproval to true if any action is requestUserApproval.",
             "",
@@ -388,6 +427,14 @@ export async function POST(request: Request) {
       seen.add(key);
 
       const level = fieldId ? levelById.get(fieldId) : undefined;
+      if (
+        isWrite &&
+        fieldId &&
+        typeById.get(fieldId) === "textarea" &&
+        action.args?.value
+      ) {
+        action.args.value = polish(action.args.value);
+      }
       actions.push({
         tool: action.tool as AgentAction["tool"],
         args: action.args,

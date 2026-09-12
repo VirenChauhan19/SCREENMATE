@@ -66,6 +66,12 @@ const SENSITIVE_TOPICS = [
   "sponsor",
   "work authorization",
   "work authorisation",
+  "authorized to work",
+  "authorised to work",
+  "legally authoriz",
+  "legally authoris",
+  "eligible to work",
+  "right to work",
   "visa",
   "citizenship",
   "immigration",
@@ -95,12 +101,68 @@ export function isSensitiveTopic(fieldId: string, label: string): boolean {
  * `question_48219` tells us nothing, but a textarea is free text by
  * definition, which is generated rather than copied and therefore REVIEW.
  */
+/**
+ * Canonical topics for the questions every application asks. A stored answer is
+ * keyed by topic, so the preference you set once on one site matches the same
+ * question worded differently on the next.
+ */
+export const PREFERENCE_TOPICS = [
+  "workAuthorization",
+  "sponsorship",
+  "relocation",
+  "remotePreference",
+  "salary",
+  "startDate",
+  "noticePeriod",
+  "gender",
+  "ethnicity",
+  "veteran",
+  "disability",
+  "criminalHistory",
+  "referralSource",
+] as const;
+
+export type PreferenceTopic = (typeof PREFERENCE_TOPICS)[number];
+
+const TOPIC_MATCHERS: { topic: PreferenceTopic; match: RegExp }[] = [
+  // Order matters: sponsorship must win over the broader work-authorization test.
+  { topic: "sponsorship", match: /sponsor|visa support|h-?1b/i },
+  {
+    topic: "workAuthorization",
+    match: /legally (authori|entitled)|work authori[sz]ation|right to work|eligible to work|citizenship/i,
+  },
+  { topic: "relocation", match: /relocat/i },
+  { topic: "remotePreference", match: /remote|hybrid|on-?site preference|work location preference/i },
+  { topic: "salary", match: /salary|compensation|pay expectation|desired (base|rate)|hourly rate/i },
+  { topic: "startDate", match: /start date|available to start|availability date|earliest start/i },
+  { topic: "noticePeriod", match: /notice period|notice required/i },
+  { topic: "gender", match: /gender|sex/i },
+  { topic: "ethnicity", match: /ethnic|race|hispanic|latino/i },
+  { topic: "veteran", match: /veteran|military service/i },
+  { topic: "disability", match: /disabilit/i },
+  { topic: "criminalHistory", match: /criminal|felony|conviction|background check/i },
+  { topic: "referralSource", match: /how did you (hear|find)|referral source|where did you hear/i },
+];
+
+/** The standing-preference topic this field asks about, if any. */
+export function topicFor(fieldId: string, label: string): PreferenceTopic | null {
+  const haystack = `${fieldId} ${label}`;
+  return TOPIC_MATCHERS.find((m) => m.match.test(haystack))?.topic ?? null;
+}
+
 export function levelFor(
   fieldId: string,
   label: string,
   fieldType?: string,
 ): ActionLevel {
   if (isSensitiveTopic(fieldId, label)) return "sensitive";
+
+  // Every standing-answer question is a personal declaration, so it belongs to
+  // the user even when the wording dodges the keyword list. Referral source is
+  // the one preference that is merely a preference.
+  const topic = topicFor(fieldId, label);
+  if (topic && topic !== "referralSource") return "sensitive";
+
   const known = FIELD_LEVEL[fieldId];
   if (known) return known;
   return fieldType === "textarea" ? "review" : "safe";

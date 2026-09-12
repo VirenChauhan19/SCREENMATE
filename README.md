@@ -125,7 +125,9 @@ src/hooks/useScreenmate  the orchestration loop (web)
 
 extension/manifest.json  MV3
 extension/background.js  service worker — all network calls, keys never exposed
-extension/content/scan.js    DOM → ApplicationState
+extension/content/scan.js    DOM → ApplicationState (ARIA widgets, shadow DOM)
+extension/content/nav.js     wizard navigation; the submit refusal lives here
+extension/content/prefs.js   standing answers + cross-site option matching
 extension/content/act.js     tool writes into the DOM + verification
 extension/content/panel.js   the panel, in a shadow root
 extension/content/main.js    the orchestration loop (extension)
@@ -142,6 +144,7 @@ extension/popup/         profile editor + backend URL
 | `requestUserApproval(fieldId, reason)` | hands a sensitive field back to the user |
 | `validateApplication()` | runs the eight-check validation pass |
 | `researchCompany(reason)` | fetches external context — only when it earns the call |
+| `advance()` *(extension)* | clicks Next to reach the following step. Never Submit |
 
 In the extension these same tools write into real `<input>`, `<select>`,
 `<textarea>` and radio-group elements. Writes go through the native value setter
@@ -201,6 +204,35 @@ cp .env.example .env.local   # then fill in the two keys
 npm run dev
 ```
 
+### Multi-step applications
+
+Real applications are wizards. SCREENMATE fills a step, verifies every write,
+clicks **Next**, re-scans the new step, and keeps going — up to 8 steps.
+
+It will **never** click Submit. That is enforced in `nav.js`, not left to the
+model, because a submitted application cannot be taken back. Anything matching
+submit / apply now / finish / confirm and… / agree and… is refused, and a button
+reading "Submit and continue" is refused too. When no Next button remains, the
+run stops and hands you the submit control explicitly.
+
+### Standing answers
+
+Every application asks the same dozen questions. Answering them mid-run, on every
+site, is worse than answering once — so the first run collects them:
+
+work authorization · sponsorship · relocation · work arrangement · salary ·
+start date · gender · ethnicity · veteran status · disability status
+
+The safety property is unchanged, and worth being precise about: the agent still
+never *decides* a sensitive question. It transcribes a decision **you** already
+made, and labels it that way in the activity log. Anything left as *Ask each
+time* still stops the run.
+
+Answers are matched by topic, not by wording, so "No" set once also answers
+"No, I do not require sponsorship" on the next site. Before offering you choices
+on a custom dropdown, the extension opens it and reads the real options — it will
+not guess "Yes/No" at a question whose answers are nothing of the kind.
+
 ### Chrome extension
 
 1. `npm run dev` — the extension needs the backend for the agent, research, and
@@ -229,7 +261,8 @@ npm run typecheck      # tsc --noEmit
 npm run build          # production build
 npm run e2e            # drives the real APIs end-to-end, asserts the outcome
 npm run fixture:serve  # serves fixtures/apply.html on :8099
-npm run ext:e2e        # loads the extension into real Chrome and asserts
+npm run ext:e2e        # single page, "Ask each time" branch
+npm run ext:workday    # multi-step wizard, standing-answers branch
 ```
 
 `npm run e2e` needs the dev server running. It exercises plan → research → act →
@@ -242,6 +275,21 @@ password inputs; a write into a genuinely React-controlled input reaches React's
 own state (not just the DOM node); every safe field is filled and verified; and
 sponsorship, salary and veteran-status fields are all left untouched and queued
 for the user.
+
+`npm run ext:workday` runs the harder case: a four-step, Workday-shaped wizard
+built on the same patterns Workday uses — `data-automation-id` hooks, button +
+portaled-listbox dropdowns, ARIA radio groups, async step transitions, and a
+Submit button on the final step. It asserts that the agent walks all four steps,
+sets custom dropdowns correctly, writes each stored answer **exactly** as you set
+it, and **never submits**.
+
+### Free-text answers
+
+Generated answers are constrained toward something a person would type: varied
+sentence length, contractions, a concrete detail from your profile, and a banned
+list of the usual tells (*passionate, excited to, delve, leverage, resonates,
+robust, seamless, cutting-edge…*). Em-dashes are stripped deterministically after
+generation, because the prompt alone does not hold that one.
 
 ## Tech
 

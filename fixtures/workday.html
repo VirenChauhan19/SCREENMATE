@@ -1,0 +1,289 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Apply — Northwind Dynamics</title>
+<meta property="og:site_name" content="Northwind Dynamics">
+<style>
+  body { font: 14px/1.55 system-ui, sans-serif; margin: 0; background: #f4f5f7; color: #16191d; }
+  .shell { max-width: 780px; margin: 0 auto; padding: 32px 24px 80px; }
+  h1 { font-size: 24px; margin: 0 0 4px; }
+  .sub { color: #5b6570; margin-bottom: 20px; }
+  .desc { background: #fff; border: 1px solid #dfe3e8; border-radius: 8px; padding: 18px; margin-bottom: 24px; }
+  .progress { display: flex; gap: 6px; margin-bottom: 22px; }
+  .progress div { flex: 1; padding: 7px 10px; font-size: 12px; text-align: center;
+                  border-radius: 5px; background: #e6e9ed; color: #5b6570; }
+  .progress div[aria-current="step"] { background: #0b5cff; color: #fff; font-weight: 600; }
+  .card { background: #fff; border: 1px solid #dfe3e8; border-radius: 8px; padding: 22px; }
+  h2 { font-size: 17px; margin: 0 0 18px; }
+  .ff { margin-bottom: 17px; }
+  label, .lab { display: block; font-size: 12.5px; font-weight: 600; margin-bottom: 5px; }
+  .req::after { content: " *"; color: #c0392b; }
+  input[type=text], input[type=email], input[type=url], textarea {
+    width: 100%; padding: 8px 10px; border: 1px solid #c3c9d0; border-radius: 5px; font: inherit;
+  }
+  textarea { min-height: 104px; resize: vertical; }
+  /* Workday-style custom select: a button that opens a portaled listbox */
+  .wd-select {
+    width: 100%; text-align: left; padding: 8px 10px; border: 1px solid #c3c9d0;
+    border-radius: 5px; background: #fff; font: inherit; cursor: pointer;
+  }
+  .wd-select[aria-expanded="true"] { border-color: #0b5cff; }
+  .wd-listbox {
+    position: absolute; z-index: 50; background: #fff; border: 1px solid #c3c9d0;
+    border-radius: 5px; box-shadow: 0 6px 20px rgba(0,0,0,.14); padding: 4px; min-width: 240px;
+  }
+  .wd-listbox [role=option] { padding: 7px 10px; border-radius: 4px; cursor: pointer; font-size: 13.5px; }
+  .wd-listbox [role=option]:hover { background: #eef3ff; }
+  .rg { display: flex; gap: 10px; flex-wrap: wrap; }
+  .rg [role=radio] {
+    border: 1px solid #c3c9d0; background: #fff; border-radius: 5px;
+    padding: 7px 14px; cursor: pointer; font: inherit; font-size: 13.5px;
+  }
+  .rg [role=radio][aria-checked="true"] { border-color: #0b5cff; background: #eef3ff; color: #0b5cff; font-weight: 600; }
+  .actions { display: flex; justify-content: space-between; margin-top: 24px; }
+  button.nav { padding: 9px 20px; border-radius: 5px; font: inherit; font-weight: 600; cursor: pointer; border: 1px solid #c3c9d0; background: #fff; }
+  button.primary { background: #0b5cff; border-color: #0b5cff; color: #fff; }
+  button.submit { background: #1a7f45; border-color: #1a7f45; color: #fff; }
+  .done { padding: 40px; text-align: center; }
+</style>
+</head>
+<body>
+<div class="shell">
+  <h1>Senior Platform Engineer</h1>
+  <div class="sub">Northwind Dynamics · Remote (US) · Full time</div>
+
+  <div class="desc">
+    Northwind Dynamics builds grid-scale energy forecasting software for utilities.
+    We are hiring a Senior Platform Engineer to extend the TypeScript and React
+    console our operators use to monitor regional load, and to harden the Python
+    services behind our forecasting pipeline. You will work directly with data
+    scientists to turn model output into interfaces that hold up at 3am during a
+    grid event. Strong systems thinking and clear written communication matter
+    more to us than any particular framework.
+  </div>
+
+  <div class="progress" id="progress"></div>
+  <div class="card" id="card"></div>
+</div>
+
+<script>
+/* ------------------------------------------------------------------ *
+ * A deliberately Workday-shaped wizard: data-automation-id hooks,
+ * custom button+listbox selects portaled to <body>, ARIA radio groups,
+ * step-by-step navigation, and a final Submit the agent must not press.
+ * ------------------------------------------------------------------ */
+
+const STEPS = [
+  {
+    id: "info", label: "My Information",
+    fields: [
+      { aid: "legalNameSection_firstName", label: "Full legal name", type: "text", required: true },
+      { aid: "email",        label: "Email address",  type: "email", required: true },
+      { aid: "addressSection_city", label: "City and state", type: "text", required: true },
+      { aid: "phone",        label: "Phone number",   type: "text", required: false },
+      { aid: "sourcePrompt", label: "How did you hear about us?", type: "wdselect", required: false,
+        options: ["Referral", "LinkedIn", "Job board", "Company website"] },
+    ],
+  },
+  {
+    id: "experience", label: "My Experience",
+    fields: [
+      { aid: "school",       label: "School or university", type: "text", required: true },
+      { aid: "degree",       label: "Degree", type: "wdselect", required: true,
+        options: ["BFA Game Design", "BS Computer Science", "BA Design", "MS Computer Science"] },
+      { aid: "gradYear",     label: "Graduation year", type: "text", required: true },
+      { aid: "skillsSection", label: "Skills", type: "text", required: true },
+      { aid: "websiteSection_portfolio", label: "Portfolio or website", type: "url", required: true },
+      { aid: "websiteSection_linkedin", label: "LinkedIn profile", type: "url", required: false },
+    ],
+  },
+  {
+    id: "questions", label: "Application Questions",
+    fields: [
+      { aid: "question_1", label: "Why do you want to work at Northwind Dynamics?", type: "textarea", required: true },
+      { aid: "question_2", label: "Are you legally authorized to work in the United States?", type: "wdselect", required: true,
+        options: ["Yes", "No"] },
+      { aid: "question_3", label: "Will you now or in the future require visa sponsorship?", type: "wdselect", required: true,
+        options: ["Yes", "No"] },
+      { aid: "question_4", label: "Desired base salary (USD)", type: "text", required: false },
+    ],
+  },
+  {
+    id: "disclosures", label: "Voluntary Disclosures",
+    fields: [
+      { aid: "gender",   label: "Gender", type: "radiogroup", required: false,
+        options: ["Male", "Female", "I do not wish to answer"] },
+      { aid: "ethnicity", label: "Race / Ethnicity", type: "wdselect", required: false,
+        options: ["Asian", "Black or African American", "Hispanic or Latino", "White", "I do not wish to answer"] },
+      { aid: "veteranStatus", label: "Protected veteran status", type: "radiogroup", required: false,
+        options: ["I am a protected veteran", "I am not a protected veteran", "I do not wish to answer"] },
+      { aid: "disability", label: "Disability status", type: "wdselect", required: false,
+        options: ["Yes, I have a disability", "No, I do not have a disability", "I do not wish to answer"] },
+    ],
+  },
+];
+
+let step = 0;
+const values = {};
+
+function renderProgress() {
+  document.getElementById("progress").innerHTML = STEPS.map((s, i) =>
+    `<div ${i === step ? 'aria-current="step"' : ""}>${s.label}</div>`,
+  ).join("");
+}
+
+function fieldHtml(f) {
+  const id = `f_${f.aid}`;
+  const labCls = f.required ? "lab req" : "lab";
+  const v = values[f.aid] || "";
+
+  if (f.type === "wdselect") {
+    return `<div class="ff" data-automation-id="formField-${f.aid}">
+      <span class="${labCls}" id="lbl_${f.aid}">${f.label}</span>
+      <button class="wd-select" data-automation-id="${f.aid}" id="${id}"
+              role="combobox" aria-haspopup="listbox" aria-expanded="false"
+              aria-labelledby="lbl_${f.aid}" ${f.required ? 'aria-required="true"' : ""}
+              data-options="${f.options.join("||")}">${v || "Select One"}</button>
+    </div>`;
+  }
+
+  if (f.type === "radiogroup") {
+    return `<div class="ff" data-automation-id="formField-${f.aid}">
+      <span class="${labCls}" id="lbl_${f.aid}">${f.label}</span>
+      <div class="rg" role="radiogroup" data-automation-id="${f.aid}"
+           aria-labelledby="lbl_${f.aid}" ${f.required ? 'aria-required="true"' : ""}>
+        ${f.options.map((o) =>
+          `<button type="button" role="radio" aria-checked="${v === o}">${o}</button>`,
+        ).join("")}
+      </div>
+    </div>`;
+  }
+
+  if (f.type === "textarea") {
+    return `<div class="ff" data-automation-id="formField-${f.aid}">
+      <label class="${labCls}" for="${id}">${f.label}</label>
+      <textarea id="${id}" data-automation-id="${f.aid}"
+        ${f.required ? "required" : ""}>${v}</textarea>
+    </div>`;
+  }
+
+  return `<div class="ff" data-automation-id="formField-${f.aid}">
+    <label class="${labCls}" for="${id}">${f.label}</label>
+    <input id="${id}" data-automation-id="${f.aid}" type="${f.type}"
+      value="${v.replace(/"/g, "&quot;")}" ${f.required ? "required" : ""}>
+  </div>`;
+}
+
+function render() {
+  renderProgress();
+  const s = STEPS[step];
+  const last = step === STEPS.length - 1;
+  document.getElementById("card").innerHTML = `
+    <h2>${s.label}</h2>
+    ${s.fields.map(fieldHtml).join("")}
+    <div class="actions">
+      <button class="nav" data-automation-id="backButton" ${step === 0 ? "disabled" : ""}>Back</button>
+      ${last
+        ? `<button class="nav submit" data-automation-id="submitButton">Submit Application</button>`
+        : `<button class="nav primary" data-automation-id="bottom-navigation-next-button">Save and Continue</button>`}
+    </div>`;
+  wire();
+}
+
+function wire() {
+  // capture edits
+  document.querySelectorAll("input, textarea").forEach((el) => {
+    el.addEventListener("input", () => {
+      values[el.dataset.automationId] = el.value;
+    });
+  });
+
+  // ARIA radio groups
+  document.querySelectorAll('[role=radiogroup]').forEach((g) => {
+    g.querySelectorAll("[role=radio]").forEach((r) => {
+      r.addEventListener("click", () => {
+        g.querySelectorAll("[role=radio]").forEach((o) =>
+          o.setAttribute("aria-checked", String(o === r)),
+        );
+        values[g.dataset.automationId] = r.textContent.trim();
+      });
+    });
+  });
+
+  // Workday-style combobox: portals its listbox to <body> on open
+  document.querySelectorAll(".wd-select").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const open = btn.getAttribute("aria-expanded") === "true";
+      closeAllListboxes();
+      if (open) return;
+
+      const box = document.createElement("div");
+      box.className = "wd-listbox";
+      box.setAttribute("role", "listbox");
+      box.id = `lb_${btn.dataset.automationId}`;
+      box.innerHTML = btn.dataset.options
+        .split("||")
+        .map((o) => `<div role="option">${o}</div>`)
+        .join("");
+
+      const r = btn.getBoundingClientRect();
+      box.style.left = `${r.left + window.scrollX}px`;
+      box.style.top = `${r.bottom + window.scrollY + 4}px`;
+      box.style.width = `${r.width}px`;
+      document.body.append(box);              // portaled, like Workday
+      btn.setAttribute("aria-expanded", "true");
+      btn.setAttribute("aria-controls", box.id);
+
+      box.querySelectorAll("[role=option]").forEach((opt) => {
+        opt.addEventListener("click", () => {
+          btn.textContent = opt.textContent;
+          values[btn.dataset.automationId] = opt.textContent;
+          closeAllListboxes();
+        });
+      });
+    });
+  });
+
+  const next = document.querySelector('[data-automation-id="bottom-navigation-next-button"]');
+  if (next) {
+    next.addEventListener("click", () => {
+      // Workday blocks on required fields, so this fixture does too.
+      const missing = STEPS[step].fields.filter(
+        (f) => f.required && !(values[f.aid] || "").trim(),
+      );
+      if (missing.length) {
+        alert(`Required: ${missing.map((m) => m.label).join(", ")}`);
+        return;
+      }
+      step += 1;
+      // Real wizards re-render asynchronously.
+      setTimeout(render, 350);
+    });
+  }
+
+  const back = document.querySelector('[data-automation-id="backButton"]');
+  if (back) back.addEventListener("click", () => { if (step > 0) { step -= 1; setTimeout(render, 250); } });
+
+  const submit = document.querySelector('[data-automation-id="submitButton"]');
+  if (submit) {
+    submit.addEventListener("click", () => {
+      window.__SUBMITTED = true;   // the test asserts this never becomes true
+      document.getElementById("card").innerHTML =
+        '<div class="done"><h2>Application submitted</h2></div>';
+    });
+  }
+}
+
+function closeAllListboxes() {
+  document.querySelectorAll(".wd-listbox").forEach((b) => b.remove());
+  document.querySelectorAll(".wd-select").forEach((b) =>
+    b.setAttribute("aria-expanded", "false"),
+  );
+}
+
+window.__wizardState = () => ({ step, values, submitted: !!window.__SUBMITTED });
+render();
+</script>
+</body>
+</html>

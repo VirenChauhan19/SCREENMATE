@@ -125,6 +125,44 @@
         cursor: pointer; padding: 0; font-family: inherit; margin-top: 10px; }
 .disc:hover { color: #d2d2da; }
 
+.pq { border-top: 1px solid #17171c; padding: 11px 0; }
+.pq:first-of-type { border-top: none; padding-top: 0; }
+.pql { font-size: 12.5px; color: #d2d2da; margin-bottom: 7px; }
+.pqo { display: flex; flex-wrap: wrap; gap: 5px; }
+.popt, .pask {
+  border: 1px solid #23232b; background: #131317; color: #8a8a98;
+  border-radius: 6px; padding: 5px 10px; font-size: 11.5px; cursor: pointer;
+  font-family: inherit;
+}
+.popt:hover, .pask:hover { border-color: #2e2e38; color: #d2d2da; }
+.popt.on { border-color: #7c6cf5; background: rgba(42,37,69,.8); color: #ada3f9; font-weight: 500; }
+.pask { margin-top: 6px; font-size: 11px; }
+.pask.on { border-color: #d8a350; color: #d8a350; }
+.pfree {
+  width: 100%; background: #131317; border: 1px solid #23232b; border-radius: 6px;
+  padding: 6px 9px; color: #eeeef2; font: inherit; font-size: 12.5px; outline: none;
+}
+.pfree:focus, .afree:focus { border-color: #7c6cf5; }
+.afree {
+  flex: 1; min-width: 140px; background: #17171c; border: 1px solid #2e2e38;
+  border-radius: 7px; padding: 7px 10px; color: #eeeef2; font: inherit;
+  font-size: 12.5px; outline: none;
+}
+.arow { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 10px; }
+.rem { display: flex; align-items: center; gap: 6px; font-size: 11px; color: #8a8a98; cursor: pointer; }
+.rem input { accent-color: #7c6cf5; }
+.skip { background: none; border: none; color: #6b6b78; font-size: 11px;
+        cursor: pointer; font-family: inherit; text-decoration: underline; }
+.skip:hover { color: #d2d2da; }
+
+.steps { display: flex; align-items: center; gap: 4px; margin-top: 9px; flex-wrap: wrap; }
+.pip {
+  width: 17px; height: 17px; border-radius: 99px; font-size: 10px; font-weight: 600;
+  display: grid; place-items: center; border: 1px solid #23232b; color: #6b6b78;
+}
+.pip.done { background: rgba(23,42,34,.7); border-color: rgba(88,181,138,.3); color: #58b58a; }
+.pip.now { background: rgba(42,37,69,.8); border-color: rgba(124,108,245,.4); color: #ada3f9; }
+
 .diff { border: 1px solid #23232b; background: rgba(14,14,17,.6); border-radius: 8px; padding: 11px; }
 .diff + .diff { margin-top: 8px; }
 .diff .h { display: flex; justify-content: space-between; gap: 8px; align-items: flex-start; }
@@ -146,6 +184,8 @@
     warn: ["▲", "t-warn"],
     verify: ["✓", "t-good"],
     context: ["↻", "t-warn"],
+    nav: ["→", "t-acc"],
+    prefs: ["☰", "t-acc"],
   };
 
   const MARKS = { done: "✓", active: "→", pending: "○", skipped: "–" };
@@ -207,7 +247,71 @@
       this.render(this.state || {});
     }
 
+    /**
+     * Captures the bits of live UI state that a full innerHTML swap destroys:
+     * scroll position, focus, caret, and any text typed but not yet saved.
+     */
+    captureUi() {
+      const body = this.root.querySelector(".body");
+      const active = this.shadow.activeElement;
+      const drafts = {};
+      this.root.querySelectorAll(".pfree").forEach((i) => {
+        drafts[i.dataset.topic] = i.value;
+      });
+      return {
+        scrollTop: body ? body.scrollTop : 0,
+        nearBottom: body
+          ? body.scrollHeight - body.scrollTop - body.clientHeight < 90
+          : true,
+        focusKey: active?.classList?.contains("pfree")
+          ? `pfree:${active.dataset.topic}`
+          : active?.classList?.contains("afree")
+            ? "afree"
+            : null,
+        caret: typeof active?.selectionStart === "number" ? active.selectionStart : null,
+        drafts,
+        answerDraft: this.root.querySelector(".afree")?.value || "",
+      };
+    }
+
+    restoreUi(ui, autoscroll) {
+      // Unsaved typing survives the re-render.
+      this.root.querySelectorAll(".pfree").forEach((i) => {
+        const draft = ui.drafts[i.dataset.topic];
+        if (draft) i.value = draft;
+      });
+      const answer = this.root.querySelector(".afree");
+      if (answer && ui.answerDraft) answer.value = ui.answerDraft;
+
+      const body = this.root.querySelector(".body");
+      if (body) {
+        // Only jump to the newest activity if the reader was already down there.
+        body.scrollTop =
+          autoscroll && ui.nearBottom ? body.scrollHeight : ui.scrollTop;
+      }
+
+      if (ui.focusKey) {
+        const el =
+          ui.focusKey === "afree"
+            ? this.root.querySelector(".afree")
+            : this.root.querySelector(
+                `.pfree[data-topic="${ui.focusKey.slice(6)}"]`,
+              );
+        if (el) {
+          el.focus({ preventScroll: true });
+          if (ui.caret !== null) {
+            try {
+              el.setSelectionRange(ui.caret, ui.caret);
+            } catch {
+              /* not all inputs support selection */
+            }
+          }
+        }
+      }
+    }
+
     render(s) {
+      const ui = this.captureUi();
       this.state = s;
       const {
         context = {},
@@ -222,6 +326,12 @@
         stats,
         banner,
         counts,
+        step = 1,
+        pages = [],
+        submitHandoff,
+        needsPrefs,
+        prefs = {},
+        prefQuestions = [],
       } = s;
 
       const tone =
@@ -229,9 +339,14 @@
           ? "err"
           : status === "waiting" || status === "reviewing"
             ? "wait"
-            : ["observing", "researching", "planning", "acting", "verifying"].includes(
-                  status,
-                )
+            : [
+                  "observing",
+                  "researching",
+                  "planning",
+                  "acting",
+                  "verifying",
+                  "advancing",
+                ].includes(status)
               ? "run"
               : "";
 
@@ -242,6 +357,7 @@
         planning: "Planning",
         acting: "Acting",
         verifying: "Verifying",
+        advancing: "Advancing to next step",
         waiting: "Waiting for user",
         reviewing: "Awaiting your review",
         complete: "Complete",
@@ -270,6 +386,25 @@
     <div class="ttl">${esc(context.jobTitle || "Scanning…")}</div>
     <div class="sub">${esc(context.company || "")}</div>
     ${
+      step > 1 || pages.length
+        ? `<div class="steps">${
+            pages
+              .map(
+                (p) =>
+                  `<span class="pip done" title="${esc(p.label)}: ${p.filled} filled">${p.step}</span>`,
+              )
+              .join("") +
+            (pages.some((p) => p.step === step)
+              ? ""
+              : `<span class="pip now" title="current">${step}</span>`)
+          }<span class="muted" style="margin-left:6px">Step ${step}${
+            context.stepLabel ? ` · ${esc(context.stepLabel)}` : ""
+          }</span></div>`
+        : context.stepLabel
+          ? `<div class="muted" style="margin-top:6px">${esc(context.stepLabel)}</div>`
+          : ""
+    }
+    ${
       counts
         ? `<div class="muted" style="margin-top:10px">${counts.filled}/${counts.total} fields
              · ${counts.sensitive} sensitive · ${counts.review} needs review</div>
@@ -294,6 +429,45 @@
                `<li class="${st.status}"><span class="m">${MARKS[st.status]}</span><span>${esc(st.label)}</span></li>`,
            )
            .join("")}</ul></div>`
+      : ""
+  }
+
+  ${
+    needsPrefs
+      ? `<div class="sec">
+           <div class="lbl">Your standing answers</div>
+           <div class="muted" style="line-height:1.55;margin-bottom:12px">
+             Answer these once. SCREENMATE applies them on every application
+             instead of stopping to ask each time. Anything you leave as
+             <em>Ask each time</em> still pauses the run.
+           </div>
+           ${prefQuestions
+             .map((q) => {
+               const cur = prefs[q.topic] || "";
+               return `<div class="pq">
+                 <div class="pql">${esc(q.label)}${q.protectedTopic ? ' <span class="muted">· optional</span>' : ""}</div>
+                 ${
+                   q.free
+                     ? `<input class="pfree" data-topic="${esc(q.topic)}"
+                          placeholder="${esc(q.placeholder || "")}"
+                          value="${esc(cur === "__ask__" ? "" : cur)}">`
+                     : `<div class="pqo">${q.options
+                         .map(
+                           (o) =>
+                             `<button class="popt${cur === o ? " on" : ""}"
+                                data-act="pref" data-topic="${esc(q.topic)}"
+                                data-val="${esc(o)}">${esc(o)}</button>`,
+                         )
+                         .join("")}</div>`
+                 }
+                 <button class="pask${cur === "__ask__" ? " on" : ""}"
+                   data-act="pref" data-topic="${esc(q.topic)}" data-val="__ask__">
+                   Ask each time</button>
+               </div>`;
+             })
+             .join("")}
+           <button class="btn" data-act="prefsDone">Save and run</button>
+         </div>`
       : ""
   }
 
@@ -322,13 +496,29 @@
            <div class="card">
              <div class="q">${esc(approval.label)}</div>
              <div class="why">SCREENMATE paused here. ${esc(approval.reason)}</div>
-             <div class="opts">${(approval.options?.length ? approval.options : ["Yes", "No"])
-               .slice(0, 6)
-               .map(
-                 (o) =>
-                   `<button class="opt" data-act="answer" data-val="${esc(o)}">${esc(o)}</button>`,
-               )
-               .join("")}</div>
+             ${
+               approval.free
+                 ? `<div class="opts"><input class="afree" placeholder="Type your answer">
+                      <button class="opt" data-act="answerFree">Save</button></div>`
+                 : `<div class="opts">${(approval.options?.length
+                     ? approval.options
+                     : ["Yes", "No"])
+                     .slice(0, 8)
+                     .map(
+                       (o) =>
+                         `<button class="opt" data-act="answer" data-val="${esc(o)}">${esc(o)}</button>`,
+                     )
+                     .join("")}</div>`
+             }
+             <div class="arow">
+               ${
+                 approval.topic
+                   ? `<label class="rem"><input type="checkbox" class="remember" checked>
+                        Remember this answer</label>`
+                   : "<span></span>"
+               }
+               <button class="skip" data-act="skip">Skip this one</button>
+             </div>
              <div class="fine">SCREENMATE does not make sensitive decisions without you.</div>
            </div>
          </div>`
@@ -373,6 +563,20 @@
            <div class="muted" style="margin-top:10px;line-height:1.6">
              ${stats ? `${stats.safeFields} safe fields · ${stats.verifiedActions} verified · ${stats.userDecisions} user decisions${stats.sourcesUsed ? ` · ${stats.sourcesUsed} sources` : ""}<br>` : ""}
              SCREENMATE completed what it could safely automate and left final control with you.
+           </div>
+         </div>`
+      : ""
+  }
+
+  ${
+    submitHandoff
+      ? `<div class="sec warn">
+           <div class="lbl w">Submission is yours</div>
+           <div class="muted" style="color:#d2d2da;line-height:1.55">
+             SCREENMATE filled and verified what it safely could, across
+             ${pages.length || 1} step${(pages.length || 1) === 1 ? "" : "s"}.
+             It stops at <strong style="color:#eeeef2">"${esc(submitHandoff.text)}"</strong> —
+             that is the one button it will never press.
            </div>
          </div>`
       : ""
@@ -427,8 +631,7 @@
 </div>`;
 
       this.bind();
-      const feed = this.root.querySelector(".body");
-      if (s.autoscroll && feed) feed.scrollTop = feed.scrollHeight;
+      this.restoreUi(ui, Boolean(s.autoscroll));
     }
 
     bind() {
@@ -443,7 +646,31 @@
             this.sourcesOpen = !this.sourcesOpen;
             return this.render(this.state);
           }
-          if (act === "answer") return this.handlers.onAnswer?.(el.dataset.val);
+          const remember = () =>
+            this.root.querySelector(".remember")?.checked !== false;
+          if (act === "answer") {
+            return this.handlers.onAnswer?.(el.dataset.val, remember());
+          }
+          if (act === "answerFree") {
+            const input = this.root.querySelector(".afree");
+            const v = input?.value.trim();
+            if (v) this.handlers.onAnswer?.(v, remember());
+            return;
+          }
+          if (act === "skip") return this.handlers.onSkip?.();
+          if (act === "pref") {
+            return this.handlers.onSetPref?.(el.dataset.topic, el.dataset.val);
+          }
+          if (act === "prefsDone") {
+            // Hand the free-text answers over together, so the run cannot start
+            // before they have been written to storage.
+            const free = {};
+            this.root.querySelectorAll(".pfree").forEach((inp) => {
+              const v = inp.value.trim();
+              if (v) free[inp.dataset.topic] = v;
+            });
+            return this.handlers.onPrefsDone?.(free);
+          }
           this.handlers[
             { run: "onRun", rescan: "onRescan", acceptAll: "onAcceptAll", revertAll: "onRevertAll" }[act]
           ]?.();

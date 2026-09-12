@@ -10,7 +10,10 @@ const CHROME = "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe";
 const EXT = path.resolve(__dirname, "..", "extension");
 const PAGE = "http://localhost:8099/apply.html";
 // A dedicated profile dir so this never touches — or is blocked by — your own Chrome.
-const PROFILE = path.join(os.tmpdir(), "screenmate-ext-test-profile");
+const fs = require("fs");
+// A fresh profile each run: stale chrome.storage from a previous run
+// would mask real bugs in how preferences are saved.
+const PROFILE = path.join(os.tmpdir(), `screenmate-ext-${Date.now()}`);
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -198,6 +201,26 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
       });
 
     if (!(await clickPanel("run screenmate"))) throw new Error("no Run button");
+    await sleep(1200);
+
+    // This suite deliberately exercises the OTHER branch: every standing answer
+    // left as "Ask each time", so the run must still stop and ask.
+    const gated = await page.evaluate(() => {
+      const sr = document.getElementById("screenmate-root").shadowRoot;
+      const qs = [...sr.querySelectorAll(".pq")];
+      qs.forEach((q) => q.querySelector(".pask")?.click());
+      return qs.length;
+    });
+    if (gated) {
+      console.log(`standing answers: ${gated} questions set to "Ask each time"`);
+      await sleep(900);
+      await page.evaluate(() => {
+        const sr = document.getElementById("screenmate-root").shadowRoot;
+        [...sr.querySelectorAll("button")]
+          .find((b) => /save and run/i.test(b.textContent))
+          ?.click();
+      });
+    }
 
     // Wait for the agent to reach a decision point.
     let st;
@@ -281,6 +304,11 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     fail(err.message);
   } finally {
     await browser.close();
+    try {
+      fs.rmSync(PROFILE, { recursive: true, force: true });
+    } catch {
+      /* best effort */
+    }
     console.log(
       `\nRESULT: ${process.exitCode ? "FAIL" : "PASS"}`,
     );

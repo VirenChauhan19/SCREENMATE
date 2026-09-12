@@ -54,7 +54,14 @@ document.getElementById("open").addEventListener("click", async () => {
     // Content script not present (page loaded before install) — inject now.
     await chrome.scripting.executeScript({
       target: { tabId: tab.id },
-      files: ["content/scan.js", "content/act.js", "content/panel.js", "content/main.js"],
+      files: [
+        "content/scan.js",
+        "content/act.js",
+        "content/nav.js",
+        "content/prefs.js",
+        "content/panel.js",
+        "content/main.js",
+      ],
     });
     await chrome.tabs.sendMessage(tab.id, { type: "screenmate:open" });
   }
