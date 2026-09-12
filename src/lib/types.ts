@@ -143,6 +143,8 @@ export interface AgentActionPlan {
   decisionSummary: string;
   actions: AgentAction[];
   requiresUserApproval: boolean;
+  /** Writes the server refused because the value was not in the profile. */
+  dropped?: string[];
 }
 
 /* ---------------- Verification ---------------- */

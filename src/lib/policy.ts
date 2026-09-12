@@ -90,9 +90,20 @@ export function isSensitiveTopic(fieldId: string, label: string): boolean {
   return SENSITIVE_TOPICS.some((topic) => haystack.includes(topic));
 }
 
-export function levelFor(fieldId: string, label: string): ActionLevel {
+/**
+ * `fieldType` matters on pages the policy has never seen: an id like
+ * `question_48219` tells us nothing, but a textarea is free text by
+ * definition, which is generated rather than copied and therefore REVIEW.
+ */
+export function levelFor(
+  fieldId: string,
+  label: string,
+  fieldType?: string,
+): ActionLevel {
   if (isSensitiveTopic(fieldId, label)) return "sensitive";
-  return FIELD_LEVEL[fieldId] ?? "safe";
+  const known = FIELD_LEVEL[fieldId];
+  if (known) return known;
+  return fieldType === "textarea" ? "review" : "safe";
 }
 
 /**

@@ -190,7 +190,7 @@ function seedFields(): FieldSeed[] {
 
 /** Applies the policy layer so `level` and `sensitive` can never drift apart. */
 function applyPolicy(seed: FieldSeed): ApplicationField {
-  const level = levelFor(seed.id, seed.label);
+  const level = levelFor(seed.id, seed.label, seed.type);
   const sensitive = level === "sensitive";
   return {
     ...seed,

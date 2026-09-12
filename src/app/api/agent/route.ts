@@ -3,6 +3,7 @@ import { z } from "zod";
 import { OpenRouterError, completeJson } from "@/lib/openrouter";
 import { TOOL_MANIFEST, TOOL_NAMES } from "@/lib/tools";
 import { confidenceFor } from "@/lib/policy";
+import { isGroundedValue } from "@/lib/grounding";
 import type { AgentAction, AgentActionPlan, AgentPlan } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -346,6 +347,7 @@ export async function POST(request: Request) {
 
     const seen = new Set<string>();
     const actions: AgentAction[] = [];
+    const dropped: string[] = [];
 
     for (const action of actionPlan.actions) {
       const fieldId = action.args?.fieldId;
@@ -365,6 +367,20 @@ export async function POST(request: Request) {
           rationale: "Rewritten by policy: sensitive fields are never auto-answered.",
         });
         continue;
+      }
+
+      // Grounding net. The in-app tool layer checks this too, but the Chrome
+      // extension writes straight to the DOM, so an ungrounded value must never
+      // leave this route in the first place.
+      if (isWrite && fieldId) {
+        const fieldType = typeById.get(fieldId) ?? "text";
+        const value = action.args?.value ?? "";
+        if (!isGroundedValue(fieldType, value, profile)) {
+          dropped.push(
+            `${fieldId}: value not present in profile — write discarded`,
+          );
+          continue;
+        }
       }
 
       const key = `${action.tool}:${fieldId ?? ""}`;
@@ -390,7 +406,10 @@ export async function POST(request: Request) {
         actions.some((a) => a.tool === "requestUserApproval"),
     };
 
-    return NextResponse.json(result);
+    if (dropped.length > 0) {
+      console.warn("[screenmate:agent] dropped ungrounded writes:", dropped);
+    }
+    return NextResponse.json({ ...result, dropped });
   } catch (err) {
     const status = err instanceof OpenRouterError ? err.status : 502;
     console.error("[screenmate:agent]", err);

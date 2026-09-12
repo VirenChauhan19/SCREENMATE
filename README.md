@@ -23,9 +23,29 @@ It reads the application's live state, decides whether external research would
 actually help, takes real actions through tools, verifies that each action landed,
 and stops when a question requires human judgment.
 
+## Two surfaces, one agent
+
+SCREENMATE ships as a **Chrome extension** that works on real job application
+forms, and as a **Next.js portal** used as a reliable demo fallback.
+
+They are the same agent. The only thing that differs is where `ApplicationState`
+comes from and where tool writes land:
+
+| | Web app | Extension |
+|---|---|---|
+| State source | React state it owns | the live DOM of a page it has never seen |
+| Tool writes | `setState` | native setter + `input`/`change` events |
+| Verification | re-read React state | re-read the DOM |
+| Policy, agent, research | identical | identical |
+
+The policy layer never ships to the browser. The extension sends the fields it
+found to `/api/classify` and the server decides what may be touched, so there is
+exactly one copy of the safety rules. If the backend is unreachable the extension
+fails closed and refuses to act.
+
 ## Demo
 
-The demo surface is a job application portal for a **Software Developer Intern** role
+The portal surface is a job application for a **Software Developer Intern** role
 at **Nova Systems**. Some fields arrive pre-filled, the way a real portal that already
 knows you would behave. The rest are empty.
 
@@ -92,6 +112,7 @@ Updated ApplicationState ── back to the top
 
 ```
 src/lib/policy.ts        SAFE / REVIEW / SENSITIVE — the single source of truth
+src/lib/grounding.ts     anti-hallucination guard, shared by both surfaces
 src/lib/types.ts         shared domain types
 src/lib/profile.ts       the user profile — the ONLY source of personal facts
 src/lib/application.ts   field definitions, roles, derived state, validation report
@@ -99,7 +120,16 @@ src/lib/tools.ts         the six tools, every guard, and verification
 src/lib/openrouter.ts    schema-validated model calls
 src/app/api/agent/       plan / act / regenerate phases
 src/app/api/research/    Exa search → normalized, source-attributed briefing
-src/hooks/useScreenmate  the orchestration loop
+src/app/api/classify/    policy applied to fields scraped from any page
+src/hooks/useScreenmate  the orchestration loop (web)
+
+extension/manifest.json  MV3
+extension/background.js  service worker — all network calls, keys never exposed
+extension/content/scan.js    DOM → ApplicationState
+extension/content/act.js     tool writes into the DOM + verification
+extension/content/panel.js   the panel, in a shadow root
+extension/content/main.js    the orchestration loop (extension)
+extension/popup/         profile editor + backend URL
 ```
 
 ## Tools
@@ -112,6 +142,12 @@ src/hooks/useScreenmate  the orchestration loop
 | `requestUserApproval(fieldId, reason)` | hands a sensitive field back to the user |
 | `validateApplication()` | runs the eight-check validation pass |
 | `researchCompany(reason)` | fetches external context — only when it earns the call |
+
+In the extension these same tools write into real `<input>`, `<select>`,
+`<textarea>` and radio-group elements. Writes go through the native value setter
+followed by `input` and `change` events, which is what a controlled React or Vue
+field requires — a plain `el.value = x` updates the node but never reaches the
+framework's state, and verification catches exactly that failure.
 
 Every tool validates before it mutates. Unknown fields, empty values, wrong tool for
 the field type, options outside the allowed set, and no-op rewrites are all refused
@@ -165,6 +201,21 @@ cp .env.example .env.local   # then fill in the two keys
 npm run dev
 ```
 
+### Chrome extension
+
+1. `npm run dev` — the extension needs the backend for the agent, research, and
+   the policy layer. API keys never enter the extension.
+2. Open `chrome://extensions`, enable **Developer mode**, choose
+   **Load unpacked**, and select the `extension/` folder.
+3. Visit any job application page. A collapsed SCREENMATE pill appears when the
+   page looks like an application form; click it to open the panel.
+4. Click the toolbar icon to edit your profile or point the extension at a
+   different backend URL.
+
+Auto-detection is deliberately conservative: it needs at least four fields,
+something name- or email-shaped, and either six-plus fields or a resume/cover
+letter/experience question. A login box will not summon a panel.
+
 ```
 OPENROUTER_API_KEY=sk-or-...
 EXA_API_KEY=...
@@ -174,13 +225,23 @@ OPENROUTER_MODEL=anthropic/claude-sonnet-4.5   # optional
 Both keys are read only in server routes. Nothing reaches the client.
 
 ```bash
-npm run typecheck   # tsc --noEmit
-npm run build       # production build
-npm run e2e         # drives the real APIs end-to-end and asserts the outcome
+npm run typecheck      # tsc --noEmit
+npm run build          # production build
+npm run e2e            # drives the real APIs end-to-end, asserts the outcome
+npm run fixture:serve  # serves fixtures/apply.html on :8099
+npm run ext:e2e        # loads the extension into real Chrome and asserts
 ```
 
-`npm run e2e` requires the dev server running. It exercises plan → research → act →
+`npm run e2e` needs the dev server running. It exercises plan → research → act →
 verify → approval → validation and prints a PASS/FAIL line.
+
+`npm run ext:e2e` needs both the dev server and `fixture:serve`. It installs the
+unpacked extension into real Chrome, opens a fixture job form on a **different
+origin** than the backend, and asserts that: the scanner skips hidden, CSRF and
+password inputs; a write into a genuinely React-controlled input reaches React's
+own state (not just the DOM node); every safe field is filled and verified; and
+sponsorship, salary and veteran-status fields are all left untouched and queued
+for the user.
 
 ## Tech
 

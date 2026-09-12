@@ -2,14 +2,22 @@
 
 ## Before you start
 
-- [ ] `npm run dev` is running, browser at `http://localhost:3000`
-- [ ] Window is **maximized** — the layout is desktop-first
-- [ ] Both keys are in `.env.local`
-- [ ] Click **Reset** so the form is in its starting state
-- [ ] Optional dry run: `npm run e2e` should print `RESULT: PASS`
+**Primary demo: the Chrome extension on a real job posting.**
+**Backup: the Next.js portal in a second tab.** Have both ready.
 
-**The one button you press:** `Start demo` in the top bar. It resets state and kicks
-off the run. Everything after that is the agent working for real — no scripted output.
+- [ ] `npm run dev` is running (the extension needs it for agent, research, policy)
+- [ ] Extension loaded: `chrome://extensions` → Developer mode → Load unpacked → `extension/`
+- [ ] Toolbar icon → your profile is filled in → **Backend reachable** shows green
+- [ ] A real job application page open in tab 1 — pick one and **test it before you
+      present**. Greenhouse, Lever and Ashby forms scan reliably; Workday does not.
+- [ ] `http://localhost:3000` open in tab 2 as the fallback
+- [ ] Window **maximized**
+- [ ] Dry runs, both green:
+      `npm run e2e` → `RESULT: PASS`
+      `npm run fixture:serve` + `npm run ext:e2e` → `RESULT: PASS`
+
+**If the live site misbehaves, switch to tab 2 and keep talking.** The portal demo
+is the same agent; nothing in your script changes except the surface.
 
 ---
 
@@ -22,18 +30,23 @@ off the run. Everything after that is the agent working for real — no scripted
 
 > "SCREENMATE lives inside the application instead."
 
-**On screen:** the Nova Systems application portal, some fields filled, some empty.
-Don't press anything yet.
+**On screen:** a real job application page, untouched. Don't press anything yet.
+Point out the small SCREENMATE pill that appeared by itself in the corner —
+it detected this page is an application form.
 
 ---
 
 ## 0:15 – 0:30 · Reading the environment
 
-**Press `Start demo`.**
+**Click the pill to open the panel.**
 
-> "It starts by reading the live form state — not a description of the form, the
-> actual state. Nine open fields. It knows which are required, which have options,
-> and which two are sensitive."
+> "It reads the live DOM of a page it has never seen — not a description of the
+> form, the actual form. It resolves every label, works out which fields are
+> required, which have fixed options, and which ones it isn't allowed to touch."
+
+> "That classification doesn't happen in the extension. It sends what it found to
+> the server and the server decides. One copy of the safety rules, and if the
+> backend is unreachable the extension refuses to act at all."
 
 **Point at:** the right panel — `Observing`, then the observation line, then
 **Agent plan** appearing with 4–6 steps.
@@ -48,13 +61,13 @@ Don't press anything yet.
 
 **Point at:** `Research required` in the activity feed and its rationale.
 
-> "It reasoned that 'why are you interested in this role' can't be answered from my
-> profile or the job description alone — neither one says what Nova Systems actually
-> builds. So it calls Exa. If only my degree and portfolio were missing, it skips the
-> call and says so. It doesn't research by reflex."
+> "It reasoned that 'why do you want to work here' can't be answered from my profile
+> or the posting alone — neither one says what this company actually builds today. So
+> it calls Exa. If only my degree and portfolio were missing, it skips the call and
+> says so. It doesn't research by reflex."
 
-**Point at:** `Company context retrieved · 4 sources`. Expand **Research** → click
-**4 sources used** to show the real titles and why each mattered.
+**Point at:** `Company context retrieved · N sources`. Expand **Research** → click
+**N sources used** to show the real titles and why each mattered.
 
 > "Real sources. Attributed. Not dumped into the UI."
 
@@ -62,22 +75,25 @@ Don't press anything yet.
 
 ## 0:50 – 1:10 · Acting and verifying
 
-**Point at:** fields filling in the left panel, one at a time, each with a brief
+**Point at:** fields filling in on the real page, one at a time, each with a brief
 violet highlight.
 
-> "These are real tool calls against the form — `fillField`, `selectOption`. Not text
-> I have to paste."
+> "These are real tool calls writing into someone else's form — `fillField`,
+> `selectOption`. Not text I have to paste."
+
+> "And they go through the native value setter plus the events a framework listens
+> for. If you just assign `.value` on a React-controlled input, the box looks right
+> and the app never hears about it. That's a bug that ships silently — which is
+> exactly why the next part matters."
 
 **Point at:** the indented `Field update confirmed` lines under each action.
 
-> "And after every single write, it re-reads application state and verifies: field
-> exists, value committed, no validation error, counted as complete. If a write
-> doesn't land, it retries once and reports it rather than pretending."
+> "After every single write it re-reads the page and verifies: element still there,
+> value actually committed, field non-empty, no validation error raised. If a write
+> doesn't land it retries once, then reports the failure rather than pretending."
 
-**Point at:** the badges — `Agent completed` on portfolio (high confidence, copied
-verbatim) vs `Review recommended` on skills.
-
-> "It also tells you how much to trust each one."
+> "That check is what catches the React problem I just mentioned — it's checking the
+> page, not its own optimism."
 
 ---
 
@@ -85,20 +101,24 @@ verbatim) vs `Review recommended` on skills.
 
 **Point at:** the motivation field.
 
-> "This one is generated — profile, plus job description, plus the research it just
-> did. And it's grounded: outside free text, every value it writes has to appear
-> verbatim in my profile. It structurally cannot invent a school or a URL."
+> "This one is generated — profile, plus the posting, plus the research it just did.
+> Everything else is grounded: outside free text, every value it writes must appear
+> verbatim in my profile, checked server-side before the plan ever reaches the page.
+> It structurally cannot invent a school, a date, or a URL."
 
 ---
 
 ## 1:25 – 1:40 · Stopping
 
-**Point at:** the amber `User decision required` card.
+**Point at:** the amber `User decision required` card, and at the sponsorship,
+salary and veteran-status fields still sitting empty on the page.
 
-> "Then it hits this and stops."
+> "Then it hits these and stops. Sponsorship. Desired salary. Veteran status."
 
-> "Sponsorship. Work authorization. That's a legal declaration about me — an agent has
-> no business answering it, no matter how confident it is."
+> "Note it has never seen this form before. Those fields have machine-generated ids
+> like `question_88217` — nothing to pattern-match on. It classified them from the
+> label text alone, and anything touching visa, salary, disability or demographics
+> fails closed by default. A field it doesn't understand is a field it won't touch."
 
 > "This is enforced in three independent places: the prompt, the server, and the tool
 > layer. I tried to jailbreak it — I put an instruction in the job description telling
@@ -121,8 +141,9 @@ verbatim) vs `Review recommended` on skills.
 
 **Point at:** the validation checks, then the review panel.
 
-> "Final validation — eight checks, zero blockers. Then it shows me everything it
-> changed, before and after, and asks me to approve it."
+> "Final validation, then it shows me everything it changed, before and after, and
+> asks me to approve it. Accept all, or revert all — the revert puts the page back
+> exactly as it found it."
 
 > "It never submits. SCREENMATE completed what it could safely automate and left final
 > control with me."
@@ -131,7 +152,7 @@ verbatim) vs `Review recommended` on skills.
 
 ## If you have 30 more seconds
 
-**The context-change moment** — this is the strongest unscripted beat:
+**The context-change moment** (portal tab) — the strongest unscripted beat:
 
 1. Clear the **Portfolio URL** field by hand.
 2. The panel immediately shows `Context changed` with **Restore value** / **Leave it**.
@@ -158,14 +179,18 @@ verbatim) vs `Review recommended` on skills.
 | `External research unavailable` | Keep going. The agent proceeds on the job description alone. Call it out as designed degradation. |
 | Run feels slow | Don't wait in silence — narrate the plan panel while actions land. |
 | Anything looks wrong | **Reset** in the top bar, then `Start demo` again. |
+| Extension panel never appears | Click the toolbar icon → **Open on this page**. Auto-detect is deliberately conservative. |
+| `Cannot classify fields` | The backend is down. `npm run dev`, then **Rescan page**. |
+| Live site parses badly | Switch to the portal tab. Same agent, same script. |
 
 ## Questions you'll probably get
 
 **"Is the research real or canned?"**
-Real. Expand the sources and open one — it's live Exa output. Nova Systems is an
-actual Australian defence engineering firm, which is why the research talks about
-geospatial and defence work while our demo job description is a web role. The mismatch
-is proof it isn't faked.
+Real. Expand the sources and open one — it's live Exa output on whatever company's
+page you happen to be on. On the fallback portal demo the company is Nova Systems, a
+real Australian defence engineering firm, which is why the research talks about
+geospatial and defence work while that fictional posting is a web role. The mismatch
+is itself proof it isn't faked.
 
 **"What stops it from filling the sensitive field anyway?"**
 Three layers, any one sufficient — prompt, server rewrite, tool-layer refusal. Plus
@@ -176,6 +201,16 @@ demographics is classified sensitive automatically. New fields fail closed.
 Not on structured fields. Every non-free-text value must appear verbatim in the
 profile or the tool refuses the write and logs `Blocked ungrounded value`.
 
-**"Why not a browser extension?"**
-That's the next build. The agent already reads a structured `ApplicationState` — the
-extension is a different way to produce that state, not a different agent.
+**"Is this just autofill?"**
+Autofill matches known field names to saved values. It can't write a tailored answer,
+it doesn't research the company, it never verifies that a write landed, and it has no
+concept of a question it shouldn't answer. Show the sponsorship pause — no autofill
+does that.
+
+**"Do my API keys sit in the extension?"**
+No. The extension has no keys and no policy logic. Every call goes through the local
+backend. That's also why it fails closed when the backend is down.
+
+**"What happens on a form it can't parse?"**
+It tells you it found nothing rather than guessing. Workday is the known hard case —
+custom widgets and shadow DOM. Greenhouse, Lever, Ashby and plain HTML forms work.

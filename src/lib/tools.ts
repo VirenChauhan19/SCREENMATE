@@ -1,4 +1,5 @@
 import { buildReport, deriveState, hasValue } from "./application";
+import { isGroundedValue } from "./grounding";
 import { confidenceFor } from "./policy";
 import { userProfile } from "./profile";
 import type {
@@ -99,49 +100,6 @@ function writeField(
       : { ...f, value, filledByAgent: false, confidence: undefined, reviewed: true };
   });
   return deriveState(state, fields);
-}
-
-/**
- * Grounding check: outside of free-text answers, the agent may only write values
- * that actually exist in the user profile. It cannot invent personal data.
- */
-function isGrounded(
-  field: ApplicationField,
-  value: string,
-  profile: UserProfile,
-): boolean {
-  if (field.type === "textarea") return true;
-
-  const normalize = (s: string) => s.trim().toLowerCase();
-  const known = new Set(
-    [
-      profile.name,
-      profile.email,
-      profile.university,
-      profile.degree,
-      profile.minor,
-      profile.graduationDate,
-      profile.portfolio,
-      profile.linkedin,
-      profile.location,
-      ...profile.skills,
-      // Common composites the model may reasonably produce.
-      `${profile.degree}, minor in ${profile.minor}`,
-      `${profile.degree} (minor: ${profile.minor})`,
-    ].map(normalize),
-  );
-
-  if (field.type === "tags") {
-    const tokens = value
-      .split(",")
-      .map((t) => t.trim())
-      .filter(Boolean);
-    return tokens.length > 0 && tokens.every((t) => known.has(normalize(t)));
-  }
-
-  const v = normalize(value);
-  // Trailing-slash tolerance for URLs.
-  return known.has(v) || known.has(v.replace(/\/+$/, ""));
 }
 
 function truncate(s: string, n: number): string {
@@ -279,7 +237,7 @@ export function executeAction(
           `Allowed: ${field.options.join(", ")}`,
         );
       }
-      if (!isGrounded(field, value, profile)) {
+      if (!isGroundedValue(field.type, value, profile)) {
         return refuse(
           `Blocked ungrounded value for ${field.label}`,
           "Value was not present in the user profile.",

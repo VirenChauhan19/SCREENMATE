@@ -8,7 +8,9 @@
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
-    "e2e": "tsc scripts/e2e.ts --outDir .tsbuild --module commonjs --target ES2022 --moduleResolution node --skipLibCheck && node .tsbuild/scripts/e2e.js"
+    "e2e": "tsc scripts/e2e.ts --outDir .tsbuild --module commonjs --target ES2022 --moduleResolution node --skipLibCheck && node .tsbuild/scripts/e2e.js",
+    "ext:e2e": "node scripts/ext-e2e.js",
+    "fixture:serve": "node -e \"const h=require('http'),f=require('fs'),p=require('path');h.createServer((q,r)=>{const fp=p.join('fixtures',q.url==='/'?'apply.html':q.url);f.readFile(fp,(e,d)=>e?(r.statusCode=404,r.end()):r.end(d))}).listen(8099,()=>console.log('fixture on http://localhost:8099/apply.html'))\""
   },
   "dependencies": {
     "lucide-react": "^0.468.0",
@@ -22,6 +24,7 @@
     "@types/node": "^22.10.5",
     "@types/react": "^19.0.7",
     "@types/react-dom": "^19.0.3",
+    "puppeteer-core": "^25.10.0",
     "tailwindcss": "^4.1.13",
     "typescript": "^5.7.3"
   }

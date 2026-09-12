@@ -3,6 +3,8 @@ node_modules
 out
 .env
 .env.local
+.tsbuild
 *.tsbuildinfo
 next-env.d.ts
 .DS_Store
+fixtures/extension-run.png

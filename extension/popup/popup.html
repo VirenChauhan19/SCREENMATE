@@ -1,0 +1,78 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    width: 320px; background: #0e0e11; color: #d2d2da;
+    font: 400 13px/1.5 ui-sans-serif, -apple-system, "Segoe UI", system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  header {
+    display: flex; align-items: center; gap: 9px;
+    padding: 13px 14px; border-bottom: 1px solid #17171c;
+  }
+  .mark { width: 20px; height: 20px; border-radius: 5px; background: #7c6cf5;
+          display: grid; place-items: center; color: #fff; font-weight: 700; font-size: 11px; }
+  .word { font-size: 12px; font-weight: 600; letter-spacing: .16em; color: #eeeef2; }
+  .sec { padding: 14px; border-bottom: 1px solid #17171c; }
+  .sec:last-of-type { border-bottom: none; }
+  .lbl { font-size: 10px; letter-spacing: .11em; text-transform: uppercase;
+         font-weight: 600; color: #6b6b78; margin-bottom: 9px; }
+  label { display: block; font-size: 11px; color: #8a8a98; margin: 9px 0 4px; }
+  input, textarea {
+    width: 100%; background: #131317; border: 1px solid #23232b; border-radius: 7px;
+    padding: 7px 9px; color: #eeeef2; font: inherit; font-size: 12.5px; outline: none;
+  }
+  input:focus, textarea:focus { border-color: #7c6cf5; }
+  textarea { resize: vertical; min-height: 54px; }
+  button {
+    width: 100%; border: none; border-radius: 8px; background: #7c6cf5; color: #fff;
+    font: inherit; font-size: 13px; font-weight: 500; padding: 9px; cursor: pointer;
+    margin-top: 12px;
+  }
+  button:hover { background: #8f82f7; }
+  button.ghost { background: #131317; border: 1px solid #23232b; color: #a8a8b5; }
+  button.ghost:hover { border-color: #2e2e38; color: #eeeef2; }
+  .note { font-size: 11px; color: #6b6b78; margin-top: 9px; line-height: 1.5; }
+  .ok { color: #58b58a; }
+  .bad { color: #d4736b; }
+</style>
+</head>
+<body>
+  <header><div class="mark">S</div><div class="word">SCREENMATE</div></header>
+
+  <div class="sec">
+    <button id="open">Open on this page</button>
+    <div class="note" id="health">Checking backend…</div>
+  </div>
+
+  <div class="sec">
+    <div class="lbl">Your profile</div>
+    <div class="note" style="margin:0 0 4px">
+      The only source of personal facts. The agent cannot write a value that isn't here.
+    </div>
+    <label>Name</label><input id="name">
+    <label>Email</label><input id="email">
+    <label>Location</label><input id="location">
+    <label>University</label><input id="university">
+    <label>Degree</label><input id="degree">
+    <label>Minor</label><input id="minor">
+    <label>Graduation</label><input id="graduationDate">
+    <label>Portfolio</label><input id="portfolio">
+    <label>LinkedIn</label><input id="linkedin">
+    <label>Skills (comma-separated)</label><textarea id="skills"></textarea>
+    <button id="save">Save profile</button>
+  </div>
+
+  <div class="sec">
+    <div class="lbl">Backend</div>
+    <input id="backendUrl" placeholder="http://localhost:3000">
+    <div class="note">API keys live on this server, never in the extension.</div>
+    <button class="ghost" id="saveUrl">Save backend URL</button>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

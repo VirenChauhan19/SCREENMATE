@@ -1,0 +1,102 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Careers — Helix Robotics</title>
+<meta property="og:site_name" content="Helix Robotics">
+<style>
+ body{font:15px/1.6 system-ui;margin:0;background:#fafafa;color:#111}
+ main{max-width:720px;margin:0 auto;padding:40px 24px}
+ .desc{background:#fff;border:1px solid #e5e5e5;border-radius:10px;padding:20px;margin-bottom:28px}
+ .field{margin-bottom:20px}
+ label{display:block;font-size:13px;font-weight:600;margin-bottom:6px}
+ .req:after{content:" *";color:#c00}
+ input,select,textarea{width:100%;padding:9px 11px;border:1px solid #ccc;border-radius:7px;font:inherit}
+ textarea{min-height:110px;resize:vertical}
+ fieldset{border:1px solid #ddd;border-radius:8px;padding:12px;margin:0}
+ legend{font-size:13px;font-weight:600;padding:0 6px}
+ .radio{display:flex;gap:18px;margin-top:6px}
+ .radio label{font-weight:400;display:flex;gap:6px;align-items:center}
+ .radio input{width:auto}
+</style></head>
+<body>
+<main>
+  <h1>Senior Frontend Engineer</h1>
+  <div class="desc">
+    <p>Helix Robotics builds warehouse automation systems. We are hiring a Senior Frontend
+    Engineer to own the operator console our customers use to supervise robot fleets in real time.
+    You will work in TypeScript and React, build real-time data visualisation over a WebSocket
+    telemetry stream, and partner with our controls team to make complex machine state legible
+    to non-engineers. Remote-friendly within the US.</p>
+  </div>
+
+  <form id="app">
+    <div class="field"><label for="first_name" class="req">Full name</label>
+      <input id="first_name" name="job_application[name]" required></div>
+
+    <div class="field"><label for="em" class="req">Email address</label>
+      <input id="em" name="job_application[email]" type="email" required></div>
+
+    <div class="field"><label for="loc">Current location</label>
+      <input id="loc" name="job_application[location]"></div>
+
+    <div class="field"><label for="sch">School</label>
+      <input id="sch" name="edu[school]"></div>
+
+    <div class="field"><label for="deg">Degree</label>
+      <input id="deg" name="edu[degree]"></div>
+
+    <div class="field"><label for="grad">Graduation year</label>
+      <input id="grad" name="edu[grad_year]"></div>
+
+    <div class="field"><label for="folio" class="req">Portfolio or website</label>
+      <input id="folio" name="question_88213" type="url" required></div>
+
+    <div class="field"><label for="li">LinkedIn profile</label>
+      <input id="li" name="question_88214" type="url"></div>
+
+    <!-- React-controlled: rejects naive .value assignment -->
+    <div class="field"><label for="skills-react" class="req">Key skills</label>
+      <div id="react-root"></div></div>
+
+    <div class="field"><label for="why" class="req">Why do you want to work at Helix?</label>
+      <textarea id="why" name="question_88216" required></textarea></div>
+
+    <div class="field"><label for="spon" class="req">Will you now or in the future require visa sponsorship?</label>
+      <select id="spon" name="question_88217" required>
+        <option value="">Please select</option><option>Yes</option><option>No</option></select></div>
+
+    <div class="field"><label for="sal">Desired salary</label>
+      <input id="sal" name="question_88218"></div>
+
+    <div class="field">
+      <fieldset><legend>Protected veteran status</legend>
+        <div class="radio">
+          <label><input type="radio" name="veteran" value="y"> I am a protected veteran</label>
+          <label><input type="radio" name="veteran" value="n"> I am not a protected veteran</label>
+          <label><input type="radio" name="veteran" value="d"> I decline to answer</label>
+        </div></fieldset></div>
+
+    <input type="hidden" name="csrf" value="xyz">
+    <input type="password" name="password" style="display:none">
+  </form>
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"></script>
+<script>
+// A genuinely controlled React input. Assigning .value directly does nothing here;
+// only the native setter + an "input" event will move it.
+const e = React.createElement;
+function Controlled() {
+  const [v, setV] = React.useState("");
+  // The mirror renders from React state, so it only updates if the write
+  // actually reached React — not merely the DOM node.
+  return e(React.Fragment, null,
+    e("input", {
+      id: "skills-react", name: "question_88215", required: true,
+      value: v, onChange: (ev) => setV(ev.target.value),
+    }),
+    e("span", { id: "skills-mirror", style: { display: "none" } }, v),
+  );
+}
+ReactDOM.createRoot(document.getElementById("react-root")).render(e(Controlled));
+</script>
+</body></html>
