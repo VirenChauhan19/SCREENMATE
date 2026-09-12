@@ -191,18 +191,36 @@ async function uploadCv(file) {
   const headers = {};
   if (apiKey) headers["x-screenmate-key"] = apiKey;
 
-  let res;
-  try {
-    res = await fetch(`${base.replace(/\/+$/, "")}/api/parse-cv`, {
-      method: "POST",
-      headers,
-      body: form,
-    });
-  } catch {
+  // A hosted function that has gone cold can drop the first request; PDF
+  // parsing boots a whole PDF engine, so this one is slow to wake. One retry
+  // turns a confusing failure on someone's first upload into a short wait.
+  const url = `${base.replace(/\/+$/, "")}/api/parse-cv`;
+  let res = null;
+  let lastError = null;
+
+  for (let attempt = 0; attempt < 2 && !res; attempt++) {
+    if (attempt) {
+      const el = document.getElementById("cvStatus");
+      if (el) {
+        el.textContent = "Waking the server, one moment…";
+        el.className = "note";
+      }
+      await new Promise((r) => setTimeout(r, 1200));
+    }
+    try {
+      res = await fetch(url, { method: "POST", headers, body: form });
+    } catch (err) {
+      lastError = err;
+    }
+  }
+
+  if (!res) {
     return {
       ok: false,
       error: `Could not reach ${base}.`,
-      reason: "Check the backend URL below, or that the server is running.",
+      reason: lastError
+        ? "Check the backend URL below, or that the server is running."
+        : "",
     };
   }
 
