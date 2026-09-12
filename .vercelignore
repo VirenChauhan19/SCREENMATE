@@ -1,0 +1,6 @@
+fixtures
+scripts
+dist
+.tsbuild
+*.md
+!README.md

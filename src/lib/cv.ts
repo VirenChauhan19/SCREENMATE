@@ -21,26 +21,14 @@ export function kindFromName(name: string, mime: string): CvKind | null {
 }
 
 async function extractPdf(buf: ArrayBuffer): Promise<string> {
-  // The legacy build is the one that runs outside a browser.
-  const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
-  const doc = await pdfjs.getDocument({
-    data: new Uint8Array(buf),
-    useSystemFonts: true,
-  }).promise;
-
-  const pages: string[] = [];
-  const limit = Math.min(doc.numPages, 8);
-  for (let i = 1; i <= limit; i++) {
-    const page = await doc.getPage(i);
-    const content = await page.getTextContent();
-    pages.push(
-      content.items
-        .map((item) => ("str" in item ? item.str : ""))
-        .join(" ")
-        .replace(/\s+/g, " "),
-    );
-  }
-  return pages.join("\n\n");
+  // unpdf ships a worker-free pdfjs build. The stock one resolves its worker at
+  // runtime, which survives neither bundling nor serverless file tracing — it
+  // parsed locally and failed in production, which is the worst way to find out.
+  const { extractText: pdfText, getDocumentProxy } = await import("unpdf");
+  const pdf = await getDocumentProxy(new Uint8Array(buf));
+  const { text } = await pdfText(pdf, { mergePages: true });
+  const joined = Array.isArray(text) ? text.join("\n\n") : text;
+  return joined.replace(/[^\S\n]+/g, " ");
 }
 
 function extractDocx(buf: ArrayBuffer): string {
