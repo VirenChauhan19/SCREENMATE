@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { preflight, requireKey, withCors } from "@/lib/auth";
 import { z } from "zod";
 import { completeJson } from "@/lib/openrouter";
 import type { ResearchContext, ResearchSource } from "@/lib/types";
@@ -134,14 +135,21 @@ function heuristicNormalize(
   };
 }
 
+export function OPTIONS(request: Request) {
+  return preflight(request);
+}
+
 export async function POST(request: Request) {
+  const denied = requireKey(request);
+  if (denied) return denied;
+
   const body = await request.json().catch(() => null);
   const parsed = RequestSchema.safeParse(body);
   if (!parsed.success) {
-    return NextResponse.json(
+    return withCors(NextResponse.json(
       { error: "Invalid research request." },
       { status: 400 },
-    );
+    ), request);
   }
   const { company, role, roleId } = parsed.data;
 
@@ -150,7 +158,7 @@ export async function POST(request: Request) {
   );
 
   if (!results || results.length === 0) {
-    return NextResponse.json(
+    return withCors(NextResponse.json(
       {
         error: "External research unavailable",
         reason: process.env.EXA_API_KEY
@@ -158,7 +166,7 @@ export async function POST(request: Request) {
           : "EXA_API_KEY is not configured.",
       },
       { status: 503 },
-    );
+    ), request);
   }
 
   const usable = results.filter((r) => r.url).slice(0, 4);
@@ -209,20 +217,20 @@ export async function POST(request: Request) {
       return tagged ? { ...s, relevance: tagged.relevance } : s;
     });
 
-    return NextResponse.json({
+    return withCors(NextResponse.json({
       companySummary: normalized.companySummary,
       technicalFocus: normalized.technicalFocus,
       relevantContext: normalized.relevantContext,
       sources,
       roleId,
-    } satisfies ResearchContext);
+    } satisfies ResearchContext), request);
   } catch {
     // Exa worked, the model did not. Ship the degraded-but-real briefing.
-    return NextResponse.json({
+    return withCors(NextResponse.json({
       ...heuristicNormalize(results, company, role),
       sources: baseSources,
       degraded: true,
       roleId,
-    } satisfies ResearchContext);
+    } satisfies ResearchContext), request);
   }
 }

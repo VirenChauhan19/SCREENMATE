@@ -742,6 +742,97 @@
     })();
   }
 
+  /** Writes a user-corrected value straight to the page. */
+  async function editChange(fieldId, value) {
+    const field = S.fields.find((f) => f.id === fieldId);
+    const change = S.changes.find((c) => c.fieldId === fieldId);
+    if (!field) return;
+
+    const text = (value || "").trim();
+    if (!text) {
+      log("warn", `${field.label} left unchanged`, "An empty edit was ignored.");
+      return;
+    }
+
+    const res = await window.__screenmateAct.applyWrite(field, text);
+    if (!res.ok) {
+      log("warn", `Could not write your edit to ${field.label}`, res.reason);
+      return;
+    }
+    window.__screenmateAct.highlight(field.el);
+    const check = window.__screenmateAct.verifyWrite(field, text);
+    field.value = check.actual;
+
+    if (change) {
+      change.after = text;
+      change.verified = check.ok;
+      // Once you have edited it, it is your value, not a suggestion.
+      change.fromPreference = false;
+      change.edited = true;
+    }
+    log("write", `${field.label} edited by you`, text.slice(0, 90));
+    paint();
+  }
+
+  /** Asks for a different take on one generated answer. */
+  async function regenerateField(fieldId) {
+    if (S.running) return;
+    const field = S.fields.find((f) => f.id === fieldId);
+    if (!field) return;
+
+    S.running = true;
+    const gen = S.gen;
+    const previous = S.status;
+    setStatus("acting");
+    try {
+      log("think", `Rewriting ${field.label}`, "Producing a different angle.");
+      const res = await api("agent", payload("regenerate", { targetFieldId: fieldId }));
+      if (!res.ok) {
+        log("warn", "Regeneration unavailable", res.reason || res.error);
+        return;
+      }
+      const value = res.data?.value;
+      if (!value) return;
+
+      const w = await window.__screenmateAct.applyWrite(field, value);
+      if (!w.ok) {
+        log("warn", `Could not write the new answer to ${field.label}`, w.reason);
+        return;
+      }
+      window.__screenmateAct.highlight(field.el);
+      const check = window.__screenmateAct.verifyWrite(field, value);
+      field.value = check.actual;
+
+      const change = S.changes.find((c) => c.fieldId === fieldId);
+      if (change) {
+        change.after = value;
+        change.verified = check.ok;
+      }
+      log("write", `${field.label} rewritten`, value.slice(0, 90));
+      if (res.data.note) log("think", "What changed", res.data.note, true);
+    } finally {
+      if (!stale(gen)) {
+        S.running = false;
+        setStatus(previous === "idle" ? "reviewing" : previous);
+      }
+    }
+  }
+
+  /** Puts one field back to whatever it held before the agent touched it. */
+  async function revertOne(fieldId) {
+    const change = S.changes.find((c) => c.fieldId === fieldId);
+    const field = S.fields.find((f) => f.id === fieldId);
+    if (!change || !field) return;
+
+    await window.__screenmateAct.applyWrite(field, change.before || "");
+    field.value = change.before || "";
+    S.changes = S.changes.filter((c) => c.fieldId !== fieldId);
+    S.resolvedSensitive.add(fieldId);
+    log("warn", `${change.label} reverted`, "Put back to what it was.");
+    S.report = validate();
+    paint();
+  }
+
   async function revertAll() {
     for (const c of S.changes) {
       const field = S.fields.find((f) => f.id === c.fieldId);
@@ -828,6 +919,9 @@
         },
         onAcceptAll: () => acceptAll(),
         onRevertAll: () => void revertAll(),
+        onEditChange: (id, v) => void editChange(id, v),
+        onRegenerate: (id) => void regenerateField(id),
+        onRevertOne: (id) => void revertOne(id),
         onExpand: () => {
           // Classification costs a backend call, so defer it until the panel is
           // actually opened rather than firing on every page load.

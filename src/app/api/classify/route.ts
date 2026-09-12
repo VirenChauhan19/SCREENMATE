@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { preflight, requireKey, withCors } from "@/lib/auth";
 import { z } from "zod";
 import { isSensitiveTopic, levelFor, topicFor } from "@/lib/policy";
 
@@ -64,11 +65,18 @@ function reasonFor(id: string, label: string): string {
   );
 }
 
+export function OPTIONS(request: Request) {
+  return preflight(request);
+}
+
 export async function POST(request: Request) {
+  const denied = requireKey(request);
+  if (denied) return denied;
+
   const body = await request.json().catch(() => null);
   const parsed = RequestSchema.safeParse(body);
   if (!parsed.success) {
-    return NextResponse.json({ error: "Invalid classify request." }, { status: 400 });
+    return withCors(NextResponse.json({ error: "Invalid classify request." }, { status: 400 }), request);
   }
 
   const fields = parsed.data.fields.map((f) => {
@@ -89,7 +97,7 @@ export async function POST(request: Request) {
     };
   });
 
-  return NextResponse.json({
+  return withCors(NextResponse.json({
     fields,
     counts: {
       total: fields.length,
@@ -97,5 +105,5 @@ export async function POST(request: Request) {
       review: fields.filter((f) => f.level === "review").length,
       safe: fields.filter((f) => f.level === "safe").length,
     },
-  });
+  }), request);
 }

@@ -11,6 +11,7 @@ const CHROME = "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe";
 const EXT = path.resolve(__dirname, "..", "extension");
 const PAGE = "http://localhost:8099/workday.html";
 const fs = require("fs");
+const { configureExtension } = require("./ext-helpers");
 // A fresh profile each run: stale chrome.storage from a previous run
 // would mask real bugs in how preferences are saved.
 const PROFILE = path.join(os.tmpdir(), `screenmate-wd-${Date.now()}`);
@@ -46,6 +47,8 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
   try {
     const extId = await browser.installExtension(EXT);
+    // A throwaway profile starts with empty storage; give it the backend config.
+    await configureExtension(browser, extId);
     console.log(`extension installed: ${extId}\n`);
 
     const page = await browser.newPage();

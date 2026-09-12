@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { preflight, requireKey, withCors } from "@/lib/auth";
 import { z } from "zod";
 import { OpenRouterError, completeJson } from "@/lib/openrouter";
 import { TOOL_MANIFEST, TOOL_NAMES } from "@/lib/tools";
@@ -197,11 +198,18 @@ function researchBlock(
 
 /* ---------------- Handler ---------------- */
 
+export function OPTIONS(request: Request) {
+  return preflight(request);
+}
+
 export async function POST(request: Request) {
+  const denied = requireKey(request);
+  if (denied) return denied;
+
   const body = await request.json().catch(() => null);
   const parsed = RequestSchema.safeParse(body);
   if (!parsed.success) {
-    return NextResponse.json({ error: "Invalid agent request." }, { status: 400 });
+    return withCors(NextResponse.json({ error: "Invalid agent request." }, { status: 400 }), request);
   }
 
   const { phase, applicationState, profile, research, recentActions } = parsed.data;
@@ -283,7 +291,7 @@ export async function POST(request: Request) {
           label: clamp(s.label, 44),
         })),
       };
-      return NextResponse.json(result);
+      return withCors(NextResponse.json(result), request);
     }
 
     if (phase === "regenerate") {
@@ -291,10 +299,10 @@ export async function POST(request: Request) {
         (f) => f.id === parsed.data.targetFieldId,
       );
       if (!target || target.sensitive) {
-        return NextResponse.json(
+        return withCors(NextResponse.json(
           { error: "That field cannot be regenerated." },
           { status: 400 },
-        );
+        ), request);
       }
       const regenerated = await completeJson(
         [
@@ -327,10 +335,10 @@ export async function POST(request: Request) {
         RegenerateSchema,
         { maxTokens: 700, temperature: 0.8 },
       );
-      return NextResponse.json({
+      return withCors(NextResponse.json({
         ...regenerated,
         value: polish(regenerated.value),
-      });
+      }), request);
     }
 
     /* ---------------- act ---------------- */
@@ -456,17 +464,17 @@ export async function POST(request: Request) {
     if (dropped.length > 0) {
       console.warn("[screenmate:agent] dropped ungrounded writes:", dropped);
     }
-    return NextResponse.json({ ...result, dropped });
+    return withCors(NextResponse.json({ ...result, dropped }), request);
   } catch (err) {
     const status = err instanceof OpenRouterError ? err.status : 502;
     console.error("[screenmate:agent]", err);
-    return NextResponse.json(
+    return withCors(NextResponse.json(
       {
         error: "Agent temporarily unavailable",
         reason:
           err instanceof OpenRouterError ? err.message : "Unexpected agent failure.",
       },
       { status },
-    );
+    ), request);
   }
 }

@@ -38,6 +38,12 @@
   .note { font-size: 11px; color: #6b6b78; margin-top: 9px; line-height: 1.5; }
   .ok { color: #58b58a; }
   .bad { color: #d4736b; }
+  .diff { border:1px solid #23232b; border-radius:7px; padding:9px; margin-top:9px; }
+  .drow { display:flex; gap:8px; font-size:11.5px; padding:3px 0; align-items:flex-start; }
+  .dk { color:#6b6b78; width:74px; flex:none; }
+  .dv { color:#eeeef2; word-break:break-word; flex:1; }
+  .dold { color:#55555f; text-decoration:line-through; }
+  .dnew { color:#58b58a; }
 </style>
 </head>
 <body>
@@ -46,6 +52,18 @@
   <div class="sec">
     <button id="open">Open on this page</button>
     <div class="note" id="health">Checking backend…</div>
+  </div>
+
+  <div class="sec">
+    <div class="lbl">Import from CV</div>
+    <div class="note" style="margin:0 0 9px">
+      Reads a PDF, DOCX or text CV and fills the fields below. Nothing is saved
+      until you review it — anything the CV did not say is left alone.
+    </div>
+    <input type="file" id="cvFile" accept=".pdf,.docx,.txt,.md" style="font-size:12px">
+    <button class="ghost" id="cvGo">Read CV</button>
+    <div class="note" id="cvStatus"></div>
+    <div id="cvDiff"></div>
   </div>
 
   <div class="sec">
@@ -68,9 +86,15 @@
 
   <div class="sec">
     <div class="lbl">Backend</div>
-    <input id="backendUrl" placeholder="http://localhost:3000">
-    <div class="note">API keys live on this server, never in the extension.</div>
-    <button class="ghost" id="saveUrl">Save backend URL</button>
+    <label>Server URL</label>
+    <input id="backendUrl" placeholder="https://your-app.vercel.app" spellcheck="false">
+    <label>Access key</label>
+    <input id="apiKey" type="password" placeholder="sm_..." spellcheck="false">
+    <div class="note">
+      OpenRouter and Exa keys live on the server, never in the extension.
+      The access key is what stops strangers spending your credits.
+    </div>
+    <button class="ghost" id="saveUrl">Save backend settings</button>
   </div>
 
   <script src="popup.js"></script>

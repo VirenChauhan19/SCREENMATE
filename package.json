@@ -14,11 +14,15 @@
     "ext:workday": "node scripts/ext-workday-e2e.js",
     "portals:coverage": "node scripts/portal-coverage.js",
     "portals:writes": "node scripts/portal-writes.js",
-    "portals:iframe": "node scripts/portal-run-iframe.js"
+    "portals:iframe": "node scripts/portal-run-iframe.js",
+    "package:ext": "node scripts/package-extension.js",
+    "deploy": "vercel --prod"
   },
   "dependencies": {
+    "fflate": "^0.8.3",
     "lucide-react": "^0.468.0",
     "next": "^16.3.5",
+    "pdfjs-dist": "^6.3.289",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "zod": "^3.24.1"

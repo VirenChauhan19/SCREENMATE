@@ -1,4 +1,5 @@
 /** Drives the real APIs the same way the hook does, then asserts the outcome. */
+import { readFileSync, existsSync } from "node:fs";
 import { buildReport, createInitialState, hasValue } from "../src/lib/application";
 import { userProfile } from "../src/lib/profile";
 import {
@@ -16,6 +17,15 @@ import type {
 } from "../src/lib/types";
 
 const BASE = "http://localhost:3000";
+
+/** Node has no browser Origin, so it authenticates the way the extension does. */
+const API_KEY = (() => {
+  if (!existsSync(".env.local")) return "";
+  const line = readFileSync(".env.local", "utf8")
+    .split("\n")
+    .find((l) => l.trim().startsWith("SCREENMATE_API_KEY="));
+  return line ? line.slice(line.indexOf("=") + 1).trim() : "";
+})();
 let state: ApplicationState = createInitialState();
 let research: ResearchContext | null = null;
 const changes: ChangeRecord[] = [];
@@ -60,7 +70,10 @@ const payload = (phase: string, extra: Record<string, unknown> = {}) => ({
 async function post<T>(path: string, body: unknown): Promise<T> {
   const res = await fetch(BASE + path, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      ...(API_KEY ? { "x-screenmate-key": API_KEY } : {}),
+    },
     body: JSON.stringify(body),
   });
   if (!res.ok) throw new Error(`${path} → ${res.status} ${await res.text()}`);

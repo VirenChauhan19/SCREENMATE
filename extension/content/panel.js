@@ -171,6 +171,20 @@
 .diff .b { color: #55555f; text-decoration: line-through; }
 .diff .a { color: #d2d2da; word-break: break-word; }
 .ok { border-color: rgba(88,181,138,.25); background: rgba(23,42,34,.35); }
+.cacts { display:flex; gap:5px; margin-top:8px; flex-wrap:wrap; }
+.mini {
+  border:1px solid #23232b; background:#131317; color:#8a8a98; border-radius:5px;
+  padding:4px 9px; font-size:11px; cursor:pointer; font-family:inherit;
+}
+.mini:hover { border-color:#7c6cf5; color:#ada3f9; }
+.mini.go { background:#7c6cf5; border-color:#7c6cf5; color:#fff; }
+.mini.go:hover { background:#8f82f7; color:#fff; }
+.editor { margin-top:8px; }
+.efield {
+  width:100%; background:#17171c; border:1px solid #2e2e38; border-radius:6px;
+  padding:7px 9px; color:#eeeef2; font:inherit; font-size:12px; outline:none; resize:vertical;
+}
+.efield:focus { border-color:#7c6cf5; }
 `;
 
   const ICONS = {
@@ -258,6 +272,10 @@
       this.root.querySelectorAll(".pfree").forEach((i) => {
         drafts[i.dataset.topic] = i.value;
       });
+      const editors = {};
+      this.root.querySelectorAll(".editor").forEach((e) => {
+        if (!e.hidden) editors[e.dataset.editor] = e.querySelector(".efield")?.value;
+      });
       return {
         scrollTop: body ? body.scrollTop : 0,
         nearBottom: body
@@ -270,6 +288,7 @@
             : null,
         caret: typeof active?.selectionStart === "number" ? active.selectionStart : null,
         drafts,
+        editors,
         answerDraft: this.root.querySelector(".afree")?.value || "",
       };
     }
@@ -282,6 +301,15 @@
       });
       const answer = this.root.querySelector(".afree");
       if (answer && ui.answerDraft) answer.value = ui.answerDraft;
+
+      // An editor the user had open, and whatever they had typed in it, stays.
+      for (const [fieldId, value] of Object.entries(ui.editors || {})) {
+        const box = this.editorFor(fieldId);
+        if (!box) continue;
+        box.hidden = false;
+        const area = box.querySelector(".efield");
+        if (area && value !== undefined) area.value = value;
+      }
 
       const body = this.root.querySelector(".body");
       if (body) {
@@ -526,23 +554,50 @@
   }
 
   ${
-    status === "reviewing" && changes.length
+    changes.length
       ? `<div class="sec">
-           <div class="lbl">Review changes</div>
-           <div class="muted" style="margin-bottom:10px">${changes.length} change${changes.length === 1 ? "" : "s"} written to this page. Nothing is submitted.</div>
+           <div class="lbl">${status === "reviewing" ? "Review changes" : "Changes on this step"}</div>
+           <div class="muted" style="margin-bottom:10px">
+             ${changes.length} field${changes.length === 1 ? "" : "s"} written. Edit anything that is wrong — nothing is submitted.
+           </div>
            ${changes
              .map(
-               (c) => `<div class="diff${c.verified ? " ok" : ""}">
-               <div class="h"><div class="n">${esc(c.label)}</div>
-               <div class="muted ${c.verified ? "t-good" : "t-warn"}">${c.verified ? "verified" : "unverified"}</div></div>
+               (c, i) => `<div class="diff${c.verified ? " ok" : ""}" data-i="${i}">
+               <div class="h">
+                 <div class="n">${esc(c.label)}</div>
+                 <div class="muted ${c.verified ? "t-good" : "t-warn"}">${
+                   c.fromPreference ? "your answer" : c.verified ? "verified" : "unverified"
+                 }</div>
+               </div>
                <div class="v b">${esc(c.before || "Empty")}</div>
-               <div class="v a">${esc(c.after)}</div></div>`,
+               <div class="v a">${esc(c.after)}</div>
+               <div class="cacts">
+                 <button class="mini" data-act="editChange" data-field="${esc(c.fieldId)}">Edit</button>
+                 ${
+                   c.regenerable !== false && c.level === "review"
+                     ? `<button class="mini" data-act="regen" data-field="${esc(c.fieldId)}">Regenerate</button>`
+                     : ""
+                 }
+                 <button class="mini" data-act="revertOne" data-field="${esc(c.fieldId)}">Revert</button>
+               </div>
+               <div class="editor" data-editor="${esc(c.fieldId)}" hidden>
+                 <textarea class="efield" rows="4">${esc(c.after)}</textarea>
+                 <div class="cacts">
+                   <button class="mini go" data-act="saveEdit" data-field="${esc(c.fieldId)}">Save to page</button>
+                   <button class="mini" data-act="cancelEdit" data-field="${esc(c.fieldId)}">Cancel</button>
+                 </div>
+               </div>
+             </div>`,
              )
              .join("")}
-           <div class="row" style="margin-top:12px">
-             <button class="btn" data-act="acceptAll">Accept all</button>
-             <button class="btn ghost" data-act="revertAll">Revert all</button>
-           </div>
+           ${
+             status === "reviewing"
+               ? `<div class="row" style="margin-top:12px">
+                    <button class="btn" data-act="acceptAll">Looks right</button>
+                    <button class="btn ghost" data-act="revertAll">Revert all</button>
+                  </div>`
+               : ""
+           }
          </div>`
       : ""
   }
@@ -634,6 +689,13 @@
       this.restoreUi(ui, Boolean(s.autoscroll));
     }
 
+    /** Attribute selectors need escaping; matching on dataset does not. */
+    editorFor(fieldId) {
+      return [...this.root.querySelectorAll(".editor")].find(
+        (e) => e.dataset.editor === fieldId,
+      );
+    }
+
     bind() {
       this.root.querySelectorAll("[data-act]").forEach((el) => {
         el.addEventListener("click", (ev) => {
@@ -658,6 +720,19 @@
             return;
           }
           if (act === "skip") return this.handlers.onSkip?.();
+          if (act === "editChange" || act === "cancelEdit") {
+            const box = this.editorFor(el.dataset.field);
+            if (box) box.hidden = act === "cancelEdit" ? true : !box.hidden;
+            if (box && !box.hidden) box.querySelector(".efield")?.focus();
+            return;
+          }
+          if (act === "saveEdit") {
+            const box = this.editorFor(el.dataset.field);
+            const v = box?.querySelector(".efield")?.value ?? "";
+            return this.handlers.onEditChange?.(el.dataset.field, v);
+          }
+          if (act === "regen") return this.handlers.onRegenerate?.(el.dataset.field);
+          if (act === "revertOne") return this.handlers.onRevertOne?.(el.dataset.field);
           if (act === "pref") {
             return this.handlers.onSetPref?.(el.dataset.topic, el.dataset.val);
           }

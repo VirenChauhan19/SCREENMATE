@@ -121,6 +121,10 @@ src/lib/openrouter.ts    schema-validated model calls
 src/app/api/agent/       plan / act / regenerate phases
 src/app/api/research/    Exa search → normalized, source-attributed briefing
 src/app/api/classify/    policy applied to fields scraped from any page
+src/app/api/parse-cv/    CV → structured profile (PDF, DOCX, text)
+src/app/api/health/      deploy diagnostics; reports config, never secrets
+src/lib/auth.ts          access key + CORS for the hosted API
+src/lib/cv.ts            text extraction
 src/hooks/useScreenmate  the orchestration loop (web)
 
 extension/manifest.json  MV3
@@ -196,6 +200,58 @@ written value traces back to stored data:
 - A tool write that doesn't land → retried once, then logged as a verification
   failure. The run continues.
 
+## Going live
+
+The extension needs a backend, because that is where the API keys and the safety
+policy live. Local is fine for development; a deploy is what makes it usable
+away from your machine.
+
+```bash
+# 1. Log in (interactive, one time)
+npx vercel login
+
+# 2. Deploy
+npx vercel --prod
+
+# 3. Set the three secrets on the deployment
+npx vercel env add OPENROUTER_API_KEY production
+npx vercel env add EXA_API_KEY production
+npx vercel env add SCREENMATE_API_KEY production   # generate one, see below
+npx vercel --prod                                  # redeploy so they take effect
+```
+
+Generate the access key:
+
+```bash
+node -e "console.log('sm_'+require('crypto').randomBytes(24).toString('base64url'))"
+```
+
+Then check it:
+
+```
+https://<your-app>.vercel.app/api/health
+→ {"ok":true,"requiresKey":true,"configured":{"openrouter":true,"exa":true}}
+```
+
+Finally, open the extension popup, set **Server URL** to your deployment and
+paste the **access key**. Chrome will ask to allow that host — that is the
+`optional_host_permissions` grant, requested only for the backend you chose.
+
+### Why there is an access key
+
+Deployed, these routes are a public endpoint spending real OpenRouter and Exa
+credits. `SCREENMATE_API_KEY` gates them. Requests from the deployment's own
+origin are allowed through so the bundled web demo keeps working.
+
+Be clear about what that is worth: an `Origin` header can be forged, so this is a
+deterrent against a shared URL quietly draining your credits, not a defence
+against someone who actually wants in. If this were more than a demo, the real
+control is rate limiting at the edge.
+
+If `SCREENMATE_API_KEY` is unset the gate is open, which keeps local development
+frictionless. `/api/health` reports which mode is live so a misconfigured deploy
+is obvious rather than silently public.
+
 ## Setup
 
 ```bash
@@ -245,6 +301,28 @@ model, because a submitted application cannot be taken back. Anything matching
 submit / apply now / finish / confirm and… / agree and… is refused, and a button
 reading "Submit and continue" is refused too. When no Next button remains, the
 run stops and hands you the submit control explicitly.
+
+### Importing your CV
+
+The popup reads a **PDF, DOCX or plain-text** CV and fills your profile from it.
+Text is extracted server-side (`pdfjs` for PDF, the document XML for DOCX) and a
+model pulls out the structured fields.
+
+It is a parser, not a writer: values are copied verbatim, and anything the CV
+does not state comes back as **missing** rather than invented — these values get
+typed into real applications, so a wrong one is worse than a blank one. Nothing
+is saved until you see a before/after diff and apply it.
+
+A scanned, image-only PDF has no text layer, and the popup says so instead of
+returning an empty profile.
+
+### Fixing the agent's work
+
+Every change the agent makes appears in the panel with **Edit**, **Regenerate**
+(for generated prose) and **Revert**, per field. An edit writes straight to the
+page and is re-verified like any other write; the field is then marked as yours
+rather than the agent's. An editor you have open, and anything typed into it,
+survives the panel re-rendering.
 
 ### Standing answers
 
@@ -297,6 +375,7 @@ npm run ext:workday    # multi-step wizard, standing-answers branch
 npm run portals:coverage  # what the scanner SEES on 4 ATS shapes
 npm run portals:writes    # what it can CHANGE on those shapes
 npm run portals:iframe    # full run inside an iframe-embedded portal
+npm run package:ext       # zip the extension into dist/
 ```
 
 `npm run e2e` needs the dev server running. It exercises plan → research → act →

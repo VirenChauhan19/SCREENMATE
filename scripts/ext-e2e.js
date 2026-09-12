@@ -11,6 +11,7 @@ const EXT = path.resolve(__dirname, "..", "extension");
 const PAGE = "http://localhost:8099/apply.html";
 // A dedicated profile dir so this never touches — or is blocked by — your own Chrome.
 const fs = require("fs");
+const { configureExtension } = require("./ext-helpers");
 // A fresh profile each run: stale chrome.storage from a previous run
 // would mask real bugs in how preferences are saved.
 const PROFILE = path.join(os.tmpdir(), `screenmate-ext-${Date.now()}`);
@@ -39,6 +40,8 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   try {
     // Chrome 137+ gates --load-extension, so install through the DevTools API.
     const extId = await browser.installExtension(EXT);
+    // A throwaway profile starts with empty storage; give it the backend config.
+    await configureExtension(browser, extId);
     console.log(`extension installed: ${extId}`);
 
     // Confirm Chrome actually accepted the unpacked extension.
@@ -296,6 +299,50 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
       );
       check("user answer landed in the DOM", after === "No");
       console.log(`  sponsorship now: "${after}"`);
+    }
+
+    /* ---- 7. editing the agent's work reaches the page ---- */
+    console.log("");
+    console.log("=== EDIT A CHANGE ===");
+    const edited = await page.evaluate(async () => {
+      const sr = document.getElementById("screenmate-root").shadowRoot;
+      const btn = [...sr.querySelectorAll('[data-act="editChange"]')].find((b) =>
+        /why|interest/i.test(b.closest(".diff")?.textContent || ""),
+      ) || sr.querySelector('[data-act="editChange"]');
+      if (!btn) return { ok: false, why: "no Edit button in the review list" };
+
+      const fieldId = btn.dataset.field;
+      btn.click();
+      await new Promise((r) => setTimeout(r, 300));
+
+      const box = [...sr.querySelectorAll(".editor")].find(
+        (e) => e.dataset.editor === fieldId,
+      );
+      if (!box || box.hidden) return { ok: false, why: "editor did not open" };
+
+      box.querySelector(".efield").value = "EDITED BY THE USER, not the agent.";
+      [...sr.querySelectorAll('[data-act="saveEdit"]')]
+        .find((b) => b.dataset.field === fieldId)
+        ?.click();
+      await new Promise((r) => setTimeout(r, 900));
+      return { ok: true, fieldId };
+    });
+
+    console.log(`  edit target: ${edited.fieldId || edited.why}`);
+    check("review list offers a per-field Edit", edited.ok);
+
+    if (edited.ok) {
+      const onPage = await page.evaluate((id) => {
+        const el =
+          document.querySelector(`[name="${id}"]`) ||
+          document.getElementById(id) ||
+          [...document.querySelectorAll("input,textarea,select")].find(
+            (n) => n.name === id || n.id === id,
+          );
+        return el ? el.value : null;
+      }, edited.fieldId);
+      console.log(`  page now holds: ${JSON.stringify(String(onPage).slice(0, 48))}`);
+      check("the edit was written into the real form", /EDITED BY THE USER/.test(onPage || ""));
     }
 
     await page.screenshot({ path: "fixtures/extension-run.png", fullPage: false });

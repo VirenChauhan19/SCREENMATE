@@ -7,6 +7,7 @@ const puppeteer = require("puppeteer-core");
 const path = require("path");
 const os = require("os");
 const fs = require("fs");
+const { configureExtension } = require("./ext-helpers");
 
 const CHROME = path.join(
   "C:",
@@ -36,7 +37,8 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   };
 
   try {
-    await browser.installExtension(EXT);
+    const extId = await browser.installExtension(EXT);
+    await configureExtension(browser, extId);
     const page = await browser.newPage();
     await page.setViewport({ width: 1400, height: 1000 });
     page.on("dialog", async (d) => { console.log(`  [alert] ${d.message()}`); await d.dismiss(); });
