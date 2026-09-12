@@ -155,6 +155,8 @@ export function levelFor(
   label: string,
   fieldType?: string,
 ): ActionLevel {
+  // A file upload is always the user's to do: we surface it, never fill it.
+  if (fieldType === "file") return "sensitive";
   if (isSensitiveTopic(fieldId, label)) return "sensitive";
 
   // Every standing-answer question is a personal declaration, so it belongs to

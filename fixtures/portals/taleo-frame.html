@@ -1,0 +1,27 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Application</title>
+<style>body{font:13px/1.55 system-ui;margin:0;padding:20px;background:#fff}
+table{width:100%;border-collapse:collapse}td{padding:7px 4px;vertical-align:top}
+td.lab{width:210px;font-weight:600;font-size:12.5px}
+input,select,textarea{width:100%;padding:6px 8px;border:1px solid #bbb;border-radius:3px;font:inherit}
+textarea{min-height:90px}
+.req:after{content:" *";color:#b00}
+button{background:#26548c;color:#fff;border:0;padding:9px 20px;border-radius:3px;cursor:pointer;font:inherit;margin-top:14px}
+</style></head><body>
+<h2>Candidate Profile</h2>
+<form><table>
+<tr><td class="lab req"><label for="t_name">Full Name</label></td><td><input id="t_name" required></td></tr>
+<tr><td class="lab req"><label for="t_mail">E-mail Address</label></td><td><input id="t_mail" type="email" required></td></tr>
+<tr><td class="lab"><label for="t_city">City</label></td><td><input id="t_city"></td></tr>
+<tr><td class="lab"><label for="t_site">Personal Website</label></td><td><input id="t_site"></td></tr>
+<tr><td class="lab req"><label for="t_edu">Education Level</label></td><td>
+  <select id="t_edu" required><option value="">-- Select --</option>
+  <option>High School</option><option>BFA Game Design</option><option>Bachelor Degree</option><option>Master Degree</option></select></td></tr>
+<tr><td class="lab req"><label for="t_why">Why do you want to join Atlas Freight?</label></td><td><textarea id="t_why" required></textarea></td></tr>
+<tr><td class="lab req"><label for="t_auth">Are you legally eligible to work in the country of employment?</label></td><td>
+  <select id="t_auth" required><option value="">-- Select --</option><option>Yes</option><option>No</option></select></td></tr>
+</table>
+<button type="button" id="nextBtn">Next</button>
+</form>
+<script>window.__vals=()=>({name:t_name.value,mail:t_mail.value,city:t_city.value,
+site:t_site.value,edu:t_edu.value,why:t_why.value,auth:t_auth.value});</script>
+</body></html>

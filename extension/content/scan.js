@@ -17,7 +17,6 @@
     "button",
     "reset",
     "image",
-    "file",
     "password",
   ]);
 
@@ -115,6 +114,53 @@
     );
   }
 
+  /**
+   * The question a grouped control belongs to.
+   *
+   * A radio wrapped in `<label>Yes</label>` answers "Yes" — but the field is
+   * "Will you require visa sponsorship?". Reading the option's own label here
+   * is not just cosmetic: it is how a sensitive question gets classified safe.
+   */
+  function groupLabelFor(el) {
+    const byAria = cleanText(el.getAttribute("aria-label"));
+    if (byAria) return byAria;
+
+    const labelledBy = el.getAttribute("aria-labelledby");
+    if (labelledBy) {
+      const text = labelledBy
+        .split(/\s+/)
+        .map((id) => cleanText(document.getElementById(id)?.textContent))
+        .filter(Boolean)
+        .join(" ");
+      if (text) return text;
+    }
+
+    const name = el.getAttribute("name");
+    let node = el.parentElement;
+    for (let depth = 0; depth < 7 && node; depth++, node = node.parentElement) {
+      const siblings = name
+        ? node.querySelectorAll(`input[name="${CSS.escape(name)}"]`).length
+        : 0;
+      const isWrapper = node.matches?.(
+        "fieldset, [role=group], [role=radiogroup], [class*=question], " +
+          "[class*=field], [data-automation-id*=formField]",
+      );
+      if (siblings < 2 && !isWrapper) continue;
+
+      const candidates = node.querySelectorAll(
+        "legend, label, .label, [class*=label], [class*=Label], h1, h2, h3, h4, h5, h6",
+      );
+      for (const c of candidates) {
+        // A node containing a control is an option's own label, not the question.
+        if (c.querySelector("input, select, textarea")) continue;
+        if (c.contains(el)) continue;
+        const text = cleanText(c.textContent);
+        if (text && text.length > 2 && text.length < 220) return text;
+      }
+    }
+    return labelFor(el);
+  }
+
   function isRequired(el, label) {
     if (el.required || el.getAttribute("aria-required") === "true") return true;
     if (/\*\s*$/.test(label)) return true;
@@ -136,6 +182,8 @@
 
     if (tag === "textarea") return "textarea";
     if (tag === "select") return "select";
+    // Surfaced, never filled: a resume has to come from the user's machine.
+    if ((el.type || "").toLowerCase() === "file") return "file";
     if (role === "combobox" || role === "listbox") return "select";
     if (role === "radiogroup") return "select";
     if (role === "checkbox" || role === "switch") return "select";
@@ -215,6 +263,10 @@
   }
 
   function currentValue(el) {
+    // Never read a file path off the user's machine.
+    if ((el.type || "").toLowerCase() === "file") {
+      return el.files?.length ? `${el.files.length} file selected` : "";
+    }
     const tag = el.tagName.toLowerCase();
     const role = (el.getAttribute("role") || "").toLowerCase();
     const t = (el.type || "").toLowerCase();
@@ -244,7 +296,10 @@
       // Workday renders the chosen value as the button's own text.
       const raw = cleanText(
         el.value || el.getAttribute("aria-valuetext") || el.textContent,
-      );
+      )
+        // Custom controls fold their chevron into textContent.
+        .replace(/[▾▴▼▲⌄⌃˅˄]+\s*$/, "")
+        .trim();
       return /^(select one|select|choose|--)/i.test(raw) ? "" : raw;
     }
     if (el.isContentEditable) return cleanText(el.textContent);
@@ -301,36 +356,51 @@
     return out;
   }
 
-  /** Best-effort page context so the agent knows what it is applying to. */
+  /**
+   * Best-effort page context so the agent knows what it is applying to.
+   *
+   * Embedded forms (Taleo, iCIMS, embedded Greenhouse) sit in an iframe that
+   * knows nothing about the job — the posting is in the parent document.
+   */
   function pageContext() {
+    const host = (() => {
+      try {
+        if (window !== window.top && window.top.document?.body) return window.top;
+      } catch {
+        /* cross-origin parent: fall back to our own document */
+      }
+      return window;
+    })();
+    const doc = host.document;
+
     const meta = (sel, attr = "content") =>
-      cleanText(document.querySelector(sel)?.getAttribute(attr));
+      cleanText(doc.querySelector(sel)?.getAttribute(attr));
 
     const company =
       meta('meta[property="og:site_name"]') ||
-      cleanText(document.querySelector("header img[alt]")?.getAttribute("alt")) ||
-      location.hostname.replace(/^www\./, "").split(".")[0];
+      cleanText(doc.querySelector("header img[alt]")?.getAttribute("alt")) ||
+      host.location.hostname.replace(/^www\./, "").split(".")[0];
 
     const jobTitle =
-      cleanText(document.querySelector("h1")?.textContent) ||
+      cleanText(doc.querySelector("h1")?.textContent) ||
       meta('meta[property="og:title"]') ||
-      cleanText(document.title);
+      cleanText(doc.title);
 
     let best = "";
-    for (const node of document.querySelectorAll(
+    for (const node of doc.querySelectorAll(
       "main, article, [class*=description], [class*=content], section",
     )) {
       if (node.querySelector("input, textarea, select")) continue;
       const text = cleanText(node.textContent);
       if (text.length > best.length) best = text;
     }
-    if (best.length < 120) best = cleanText(document.body?.textContent).slice(0, 4000);
+    if (best.length < 120) best = cleanText(doc.body?.textContent).slice(0, 4000);
 
     return {
       company: (company || "this company").slice(0, 120),
       jobTitle: (jobTitle || "this role").slice(0, 160),
       jobDescription: best.slice(0, 4000),
-      url: location.href,
+      url: host.location.href,
       stepLabel: currentStepLabel(),
     };
   }
@@ -352,7 +422,12 @@
 
   function scanFields() {
     return collectElements().map((el, i) => {
-      const label = labelFor(el);
+      const type = (el.type || "").toLowerCase();
+      const grouped =
+        type === "radio" ||
+        type === "checkbox" ||
+        (el.getAttribute("role") || "").toLowerCase() === "radiogroup";
+      const label = grouped ? groupLabelFor(el) : labelFor(el);
       return {
         id: stableId(el, i),
         label: label.replace(/\s*\*\s*$/, "").slice(0, 300),
@@ -378,6 +453,7 @@
     scanFields,
     pageContext,
     labelFor,
+    groupLabelFor,
     currentValue,
     pageSignature,
     deepQueryAll,

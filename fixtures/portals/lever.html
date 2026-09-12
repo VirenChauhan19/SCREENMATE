@@ -1,0 +1,29 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Kestrel Health - Apply</title>
+<meta property="og:site_name" content="Kestrel Health">
+<style>body{font:14px/1.6 system-ui;margin:0}.page{max-width:620px;margin:0 auto;padding:34px 18px}
+.application-question{margin-bottom:20px}.application-label{display:block;font-size:13px;font-weight:600;margin-bottom:6px}
+input,textarea{width:100%;padding:9px;border:1px solid #d0d0d0;border-radius:3px;font:inherit}
+textarea{min-height:100px}.application-answer-alternative{display:block;font-weight:400;margin:4px 0}
+.postings-btn{background:#111;color:#fff;border:0;padding:11px 26px;border-radius:3px;cursor:pointer;font:inherit}
+</style></head><body><div class="page">
+<h1>Clinical Data Engineer</h1>
+<p>Kestrel Health builds ingestion pipelines for hospital EHR data. We work in Python and TypeScript,
+and care a lot about correctness because the data is real patients.</p>
+<form>
+ <div class="application-question"><label class="application-label">Full name<span>✱</span></label><input name="name" required></div>
+ <div class="application-question"><label class="application-label">Email<span>✱</span></label><input name="email" type="email" required></div>
+ <div class="application-question"><label class="application-label">Current location</label><input name="location"></div>
+ <div class="application-question"><label class="application-label">LinkedIn URL</label><input name="urls[LinkedIn]"></div>
+ <div class="application-question"><label class="application-label">Portfolio</label><input name="urls[Portfolio]"></div>
+ <div class="application-question"><label class="application-label">What interests you about Kestrel?<span>✱</span></label><textarea name="comments" required></textarea></div>
+ <div class="application-question"><label class="application-label">Will you require visa sponsorship?<span>✱</span></label>
+   <label class="application-answer-alternative"><input type="radio" name="cards[spon]" value="Yes"> Yes</label>
+   <label class="application-answer-alternative"><input type="radio" name="cards[spon]" value="No"> No</label>
+ </div>
+ <button class="postings-btn" type="button">Submit application</button>
+</form></div>
+<script>window.__vals=()=>{const g=n=>document.querySelector(`[name="${n}"]`);
+return{name:g('name').value,email:g('email').value,location:g('location').value,
+li:g('urls[LinkedIn]').value,pf:g('urls[Portfolio]').value,comments:g('comments').value,
+spon:(document.querySelector('[name="cards[spon]"]:checked')||{}).value||''}};</script>
+</body></html>

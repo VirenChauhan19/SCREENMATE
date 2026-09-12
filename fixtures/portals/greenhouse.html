@@ -1,0 +1,60 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Apply - Cirrus Labs</title>
+<meta property="og:site_name" content="Cirrus Labs">
+<style>
+body{font:14px/1.6 -apple-system,system-ui;margin:0;background:#fff;color:#222}
+#main{max-width:700px;margin:0 auto;padding:36px 20px}
+.field{margin-bottom:22px}
+label{display:block;font-size:13px;margin-bottom:6px}
+.req label:after{content:" *";color:#c00}
+input[type=text],input[type=email],textarea{width:100%;padding:8px;border:1px solid #ccc;border-radius:4px;font:inherit}
+textarea{min-height:96px}
+/* react-select style: a div control with a text value, no native select */
+.select__control{border:1px solid #ccc;border-radius:4px;padding:7px 9px;cursor:pointer;background:#fff;display:flex;justify-content:space-between}
+.select__menu{position:absolute;background:#fff;border:1px solid #ccc;border-radius:4px;margin-top:2px;z-index:20;min-width:260px;box-shadow:0 4px 14px rgba(0,0,0,.12)}
+.select__option{padding:8px 10px;cursor:pointer}.select__option:hover{background:#eef}
+button.sub{background:#297;color:#fff;border:0;border-radius:4px;padding:10px 22px;font:inherit;cursor:pointer}
+</style></head><body><div id="main">
+<h1>Infrastructure Engineer</h1>
+<p id="desc">Cirrus Labs runs a managed Postgres platform. We are hiring an Infrastructure Engineer to
+own our control plane in Go and TypeScript, and to make failover something customers never notice.</p>
+<form id="app">
+  <div class="field req"><label for="fn">Full name</label><input id="fn" name="job_application[first_name]" type="text" required></div>
+  <div class="field req"><label for="em">Email</label><input id="em" name="job_application[email]" type="email" required></div>
+  <div class="field"><label for="ph">Phone</label><input id="ph" name="job_application[phone]" type="text"></div>
+  <div class="field req"><label for="rs">Resume/CV</label><input id="rs" name="job_application[resume]" type="file" required></div>
+  <div class="field req"><label for="lk">LinkedIn Profile</label><input id="lk" name="question_1001" type="text" required></div>
+  <div class="field req"><label for="pf">Website</label><input id="pf" name="question_1002" type="text" required></div>
+  <div class="field req"><label id="lbl-edu">Highest degree attained</label>
+    <div class="select__control" role="combobox" aria-haspopup="listbox" aria-expanded="false"
+         aria-labelledby="lbl-edu" tabindex="0" data-name="question_1003"
+         data-opts="High School||BFA Game Design||Bachelor's Degree||Master's Degree"><span class="v">Select...</span><span>▾</span></div></div>
+  <div class="field req"><label for="why">Why are you interested in Cirrus Labs?</label><textarea id="why" name="question_1004" required></textarea></div>
+  <div class="field req"><label id="lbl-auth">Are you authorized to work in the US?</label>
+    <div class="select__control" role="combobox" aria-haspopup="listbox" aria-expanded="false"
+         aria-labelledby="lbl-auth" tabindex="0" data-name="question_1005"
+         data-opts="Yes||No"><span class="v">Select...</span><span>▾</span></div></div>
+  <div class="field"><label><input type="checkbox" id="consent" name="consent"> I agree to the processing of my personal data</label></div>
+  <button class="sub" type="button">Submit Application</button>
+</form></div>
+<script>
+document.querySelectorAll(".select__control").forEach(c=>{
+  c.addEventListener("click",()=>{
+    document.querySelectorAll(".select__menu").forEach(m=>m.remove());
+    if(c.getAttribute("aria-expanded")==="true"){c.setAttribute("aria-expanded","false");return;}
+    const m=document.createElement("div");m.className="select__menu";m.setAttribute("role","listbox");
+    m.id="menu_"+c.dataset.name;
+    m.innerHTML=c.dataset.opts.split("||").map(o=>`<div class="select__option" role="option">${o}</div>`).join("");
+    const r=c.getBoundingClientRect();m.style.left=r.left+scrollX+"px";m.style.top=r.bottom+scrollY+"px";m.style.width=r.width+"px";
+    document.body.append(m);c.setAttribute("aria-expanded","true");c.setAttribute("aria-controls",m.id);
+    m.querySelectorAll("[role=option]").forEach(o=>o.addEventListener("click",()=>{
+      c.querySelector(".v").textContent=o.textContent;
+      document.querySelectorAll(".select__menu").forEach(x=>x.remove());
+      c.setAttribute("aria-expanded","false");
+    }));
+  });
+});
+window.__vals=()=>({fn:fn.value,em:em.value,lk:lk.value,pf:pf.value,why:why.value,
+  edu:document.querySelector('[data-name=question_1003] .v').textContent,
+  auth:document.querySelector('[data-name=question_1005] .v').textContent,
+  consent:document.getElementById('consent').checked});
+</script></body></html>

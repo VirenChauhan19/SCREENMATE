@@ -240,5 +240,15 @@ No. The extension has no keys and no policy logic. Every call goes through the l
 backend. That's also why it fails closed when the backend is down.
 
 **"What happens on a form it can't parse?"**
-It tells you it found nothing rather than guessing. Workday is the known hard case —
-custom widgets and shadow DOM. Greenhouse, Lever, Ashby and plain HTML forms work.
+It tells you it found nothing rather than guessing. There is no per-site code —
+it reads native controls, ARIA widgets and open shadow roots, and falls back to
+plain text rather than skipping a control it doesn't recognise. Verified against
+fixtures built on the real DOM patterns of Greenhouse, Lever, Ashby, Workday and
+iframe-embedded Taleo. A form drawn on a canvas, or hidden in a closed shadow
+root, is out of reach.
+
+**"Does it handle forms inside an iframe?"**
+Yes, and that matters more than it sounds — Taleo, iCIMS and most embedded
+Greenhouse/Lever forms live in one. The script runs in every frame, the frame
+holding the form takes the panel, and the job description is read from the parent
+page, because the iframe on its own knows nothing about the job.

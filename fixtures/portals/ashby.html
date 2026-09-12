@@ -1,0 +1,54 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Meridian Robotics | Careers</title>
+<meta property="og:site_name" content="Meridian Robotics">
+<style>body{font:14px/1.6 system-ui;margin:0;background:#fbfbfd}
+._container{max-width:660px;margin:0 auto;padding:38px 20px}
+._fieldEntry{margin-bottom:20px}._label{display:block;font-size:13px;font-weight:500;margin-bottom:6px}
+input,textarea{width:100%;padding:9px 11px;border:1px solid #dcdce3;border-radius:6px;font:inherit}
+textarea{min-height:110px}
+/* Ashby-ish: a text input that also acts as a typeahead */
+.ta-menu{position:absolute;background:#fff;border:1px solid #dcdce3;border-radius:6px;z-index:30;box-shadow:0 6px 18px rgba(0,0,0,.1)}
+.ta-menu [role=option]{padding:8px 11px;cursor:pointer}.ta-menu [role=option]:hover{background:#f2f2f7}
+button{background:#5b5bd6;color:#fff;border:0;border-radius:6px;padding:10px 22px;cursor:pointer;font:inherit}
+</style></head><body><div class="_container">
+<h1>Perception Engineer</h1>
+<p>Meridian Robotics builds autonomous forklifts for cold-storage warehouses. Perception runs in
+C++ and Python; the tooling around it is React and TypeScript.</p>
+<form>
+ <div class="_fieldEntry"><label class="_label" for="a_name">Name</label><input id="a_name" required aria-required="true"></div>
+ <div class="_fieldEntry"><label class="_label" for="a_email">Email</label><input id="a_email" type="email" required aria-required="true"></div>
+ <div class="_fieldEntry"><label class="_label" for="a_school">School</label>
+   <input id="a_school" role="combobox" aria-autocomplete="list" aria-expanded="false" autocomplete="off"
+          data-opts="Stanford University||SCAD||Georgia Tech||MIT"></div>
+ <div class="_fieldEntry"><label class="_label" for="a_site">Website</label><input id="a_site"></div>
+ <div class="_fieldEntry"><label class="_label" for="a_li">LinkedIn</label><input id="a_li"></div>
+ <div class="_fieldEntry"><label class="_label" for="a_why">Why Meridian?</label><textarea id="a_why" required aria-required="true"></textarea></div>
+ <div class="_fieldEntry"><label class="_label" id="lbl_rel">Are you willing to relocate?</label>
+   <div role="radiogroup" aria-labelledby="lbl_rel">
+     <button type="button" role="radio" aria-checked="false">Yes</button>
+     <button type="button" role="radio" aria-checked="false">No</button>
+   </div></div>
+ <button type="button">Submit Application</button>
+</form></div>
+<script>
+// typeahead: typing opens a filtered option list you must click
+const ta=document.getElementById("a_school");
+ta.addEventListener("input",()=>{
+  document.querySelectorAll(".ta-menu").forEach(m=>m.remove());
+  const q=ta.value.toLowerCase();if(!q)return;
+  const opts=ta.dataset.opts.split("||").filter(o=>o.toLowerCase().includes(q));
+  if(!opts.length)return;
+  const m=document.createElement("div");m.className="ta-menu";m.setAttribute("role","listbox");m.id="ta_menu";
+  m.innerHTML=opts.map(o=>`<div role="option">${o}</div>`).join("");
+  const r=ta.getBoundingClientRect();m.style.left=r.left+scrollX+"px";m.style.top=r.bottom+scrollY+"px";m.style.width=r.width+"px";
+  document.body.append(m);ta.setAttribute("aria-expanded","true");ta.setAttribute("aria-controls","ta_menu");
+  m.querySelectorAll("[role=option]").forEach(o=>o.addEventListener("click",()=>{
+    ta.value=o.textContent;ta.dataset.confirmed="1";
+    document.querySelectorAll(".ta-menu").forEach(x=>x.remove());ta.setAttribute("aria-expanded","false");
+  }));
+});
+document.querySelectorAll('[role=radiogroup]').forEach(g=>g.querySelectorAll('[role=radio]').forEach(r=>
+  r.addEventListener("click",()=>g.querySelectorAll('[role=radio]').forEach(o=>o.setAttribute("aria-checked",String(o===r))))));
+window.__vals=()=>({name:a_name.value,email:a_email.value,school:a_school.value,
+  schoolConfirmed:a_school.dataset.confirmed==="1",site:a_site.value,li:a_li.value,why:a_why.value,
+  relocate:(document.querySelector('[role=radio][aria-checked=true]')||{textContent:''}).textContent});
+</script></body></html>

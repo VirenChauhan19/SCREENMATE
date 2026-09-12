@@ -28,6 +28,9 @@ const RequestSchema = z.object({
 const GENERIC_REASON =
   "This question touches a protected or personal topic. Only you can answer it.";
 
+const FILE_REASON =
+  "A resume or document upload has to come from your machine. SCREENMATE flags it and leaves it to you.";
+
 const SPECIFIC_REASONS: { match: RegExp; reason: string }[] = [
   {
     match: /sponsor|visa|work authori[sz]ation|citizenship|immigration/i,
@@ -75,7 +78,11 @@ export async function POST(request: Request) {
       ...f,
       level,
       sensitive,
-      sensitiveReason: sensitive ? reasonFor(f.id, f.label) : undefined,
+      sensitiveReason: sensitive
+        ? f.type === "file"
+          ? FILE_REASON
+          : reasonFor(f.id, f.label)
+        : undefined,
       flaggedByTopic: isSensitiveTopic(f.id, f.label),
       // Lets the extension answer from a standing preference the user already set.
       topic: topicFor(f.id, f.label),

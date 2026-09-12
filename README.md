@@ -204,6 +204,37 @@ cp .env.example .env.local   # then fill in the two keys
 npm run dev
 ```
 
+### Portal coverage
+
+SCREENMATE has no per-site code. It reads whatever the page exposes — native
+controls, ARIA widgets, open shadow roots — and falls back to "text" rather than
+skipping a control it does not recognise. What that buys, verified against
+fixtures built on each platform's real DOM patterns:
+
+| Shape | What makes it awkward | Status |
+|---|---|---|
+| Plain HTML forms | nothing | works |
+| Greenhouse-style | `react-select` div controls, file upload, consent box | works |
+| Lever-style | radio groups whose options carry their own `<label>` | works |
+| Ashby-style | typeahead that only opens its list once you type | works |
+| Workday-style | `data-automation-id` widgets, portaled listboxes, wizard | works |
+| Taleo / iCIMS-style | the whole form lives in an **iframe** | works |
+
+The content script runs in every frame, because an embedded form sits in an
+iframe while the job posting sits in the parent. Frames that find a form announce
+themselves and the richest one takes the panel, so exactly one panel appears. The
+job title, company and description are then read from the **parent** page — the
+iframe alone knows nothing about the job.
+
+Three classes of field are surfaced but never filled: **file uploads** (a resume
+has to come from your machine), **consent checkboxes**, and anything matching a
+protected topic.
+
+Honest limits: this is verified against faithful fixtures, not live employer
+sites. A portal that renders inputs into a closed shadow root, or draws its form
+on a canvas, will not be readable. When a page defeats the scanner it says so
+rather than guessing.
+
 ### Multi-step applications
 
 Real applications are wizards. SCREENMATE fills a step, verifies every write,
@@ -263,6 +294,9 @@ npm run e2e            # drives the real APIs end-to-end, asserts the outcome
 npm run fixture:serve  # serves fixtures/apply.html on :8099
 npm run ext:e2e        # single page, "Ask each time" branch
 npm run ext:workday    # multi-step wizard, standing-answers branch
+npm run portals:coverage  # what the scanner SEES on 4 ATS shapes
+npm run portals:writes    # what it can CHANGE on those shapes
+npm run portals:iframe    # full run inside an iframe-embedded portal
 ```
 
 `npm run e2e` needs the dev server running. It exercises plan → research → act →

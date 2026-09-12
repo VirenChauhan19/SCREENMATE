@@ -877,18 +877,78 @@
     return fields.length >= 6 || jobWords.test(text) || hasAdvance;
   }
 
+  /* ---------------- frame election ---------------- */
+
+  /**
+   * The content script runs in every frame, because embedded ATS forms (Taleo,
+   * iCIMS, embedded Greenhouse) live in an iframe while the job posting sits in
+   * the parent. Exactly one frame should own the panel, so candidates announce
+   * their field count and the richest form wins.
+   */
+  const ELECTION = "screenmate:claim";
+  const isTop = window === window.top;
+  let electionTimer = null;
+  const claims = [];
+
+  function claimFrame(count) {
+    const msg = { __screenmate: ELECTION, count, href: location.href };
+    try {
+      window.top.postMessage(msg, "*");
+    } catch {
+      /* cross-origin top: fall back to owning our own frame */
+      void mount({ collapsed: true });
+    }
+  }
+
+  if (isTop) {
+    window.addEventListener("message", (ev) => {
+      const d = ev.data;
+      if (!d || d.__screenmate !== ELECTION) return;
+      claims.push({ count: d.count, source: ev.source });
+      clearTimeout(electionTimer);
+      // Wait a beat for slower frames before deciding.
+      electionTimer = setTimeout(() => {
+        const winner = claims.reduce((a, b) => (b.count > a.count ? b : a));
+        if (winner.source === window) {
+          void mount({ collapsed: true });
+        } else {
+          try {
+            winner.source.postMessage(
+              { __screenmate: "screenmate:youWon" },
+              "*",
+            );
+          } catch {
+            /* ignore */
+          }
+        }
+      }, 600);
+    });
+  }
+
+  window.addEventListener("message", (ev) => {
+    if (ev.data?.__screenmate === "screenmate:youWon" && !S.panel) {
+      void mount({ collapsed: true });
+    }
+  });
+
   function autoMount() {
     try {
-      if (S.panel || !looksLikeApplication()) return;
-      void mount({ collapsed: true });
+      if (S.panel) return;
+      const fields = window.__screenmateScan.scanFields();
+      if (!looksLikeApplication()) return;
+      claimFrame(fields.length);
     } catch {
       /* never let detection break the host page */
     }
   }
 
   chrome.runtime.onMessage.addListener((msg) => {
-    if (msg?.type === "screenmate:toggle" || msg?.type === "screenmate:open") {
-      void mount();
+    if (msg?.type !== "screenmate:toggle" && msg?.type !== "screenmate:open") return;
+    // Opened by hand: whichever frame actually holds a form takes it.
+    try {
+      if (S.panel || looksLikeApplication() || isTop) void mount();
+    } catch {
+      /* ignore */
     }
   });
 

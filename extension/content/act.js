@@ -123,8 +123,24 @@
    */
   async function writeCombobox(el, value) {
     focusQuietly(el);
-    el.click();
-    await sleep(160);
+
+    // A typeahead is an <input> that only reveals its list once you type into
+    // it. Clicking does nothing, so type first and let the menu come to us.
+    const isTypeahead =
+      el.tagName.toLowerCase() === "input" &&
+      (el.getAttribute("aria-autocomplete") || el.getAttribute("autocomplete") === "off");
+
+    if (isTypeahead) {
+      nativeSetter(el, "");
+      fire(el, "input");
+      await sleep(60);
+      nativeSetter(el, value);
+      fire(el, "input", "keyup");
+      await sleep(220);
+    } else {
+      el.click();
+      await sleep(160);
+    }
 
     const findPopup = () => {
       const owned =
@@ -144,6 +160,12 @@
       if (!popup) await sleep(90);
     }
     if (!popup) {
+      if (isTypeahead) {
+        // The text is in the field even without a menu; verification decides.
+        fire(el, "change");
+        el.blur?.();
+        return { ok: true, note: "typed without a suggestion list" };
+      }
       el.click(); // close whatever we opened
       return { ok: false, reason: "Dropdown did not open" };
     }
@@ -158,6 +180,11 @@
       );
 
     if (!target) {
+      if (isTypeahead) {
+        fire(el, "change");
+        el.blur?.();
+        return { ok: true, note: "typed; no exact suggestion offered" };
+      }
       el.click();
       const available = options
         .slice(0, 8)
@@ -262,7 +289,21 @@
     if (role !== "combobox" && role !== "listbox") return field.options || [];
 
     const wasOpen = el.getAttribute("aria-expanded") === "true";
-    if (!wasOpen) el.click();
+    const isTypeahead =
+      el.tagName.toLowerCase() === "input" &&
+      (el.getAttribute("aria-autocomplete") || el.getAttribute("autocomplete") === "off");
+    const restore = isTypeahead ? el.value : null;
+
+    if (!wasOpen) {
+      if (isTypeahead) {
+        focusQuietly(el);
+        nativeSetter(el, "");
+        fire(el, "input");
+        await sleep(200);
+      } else {
+        el.click();
+      }
+    }
     await sleep(180);
 
     const owned =
@@ -282,7 +323,13 @@
           .slice(0, 60)
       : [];
 
-    if (!wasOpen && el.getAttribute("aria-expanded") === "true") el.click();
+    if (isTypeahead) {
+      // Put back whatever the user had typed before we probed.
+      nativeSetter(el, restore || "");
+      fire(el, "input");
+    } else if (!wasOpen && el.getAttribute("aria-expanded") === "true") {
+      el.click();
+    }
     await sleep(80);
     return options;
   }
