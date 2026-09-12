@@ -45,6 +45,7 @@
     step: 1,
     pages: [],
     observedSig: null,
+    lastObservationLog: null,
     submitHandoff: null,
     prefs: {},
     needsPrefs: false,
@@ -159,12 +160,18 @@
       value: byId.get(f.id)?.value || "",
     }));
 
-    const c = counts();
-    log(
-      "observe",
-      `Step ${S.step} analyzed${S.context.stepLabel ? ` · ${S.context.stepLabel}` : ""}`,
-      `${c.total} fields · ${c.total - c.filled} open · ${c.sensitive} sensitive`,
-    );
+    // Opening the panel observes, and so does the start of a run. Re-reading is
+    // correct — the page may have changed — but saying so twice is not.
+    const signature = `${S.step}:${S.fields.map((f) => f.id).join(",")}`;
+    if (signature !== S.lastObservationLog) {
+      S.lastObservationLog = signature;
+      const c = counts();
+      log(
+        "observe",
+        `Step ${S.step} analyzed${S.context.stepLabel ? ` · ${S.context.stepLabel}` : ""}`,
+        `${c.total} fields · ${c.total - c.filled} open · ${c.sensitive} sensitive`,
+      );
+    }
     return true;
   }
 
@@ -874,6 +881,7 @@
       step: 1,
       pages: [],
       observedSig: null,
+      lastObservationLog: null,
       submitHandoff: null,
       needsPrefs: false,
       resolvedSensitive: new Set(),

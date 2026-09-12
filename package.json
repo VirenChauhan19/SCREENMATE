@@ -21,7 +21,9 @@
     "cv:e2e": "node scripts/cv-popup-e2e.js",
     "ui:e2e": "node scripts/ui-controls-e2e.js",
     "persist:e2e": "node scripts/persistence-e2e.js",
-    "probe:real": "node scripts/real-sites-probe.js"
+    "probe:real": "node scripts/real-sites-probe.js",
+    "demo:record": "node demo/record.js",
+    "demo:cut": "node demo/cut.js"
   },
   "dependencies": {
     "fflate": "^0.8.3",
@@ -38,6 +40,7 @@
     "@types/node": "^22.10.5",
     "@types/react": "^19.0.7",
     "@types/react-dom": "^19.0.3",
+    "ffmpeg-static": "^5.3.0",
     "puppeteer-core": "^25.10.0",
     "tailwindcss": "^4.1.13",
     "typescript": "^5.7.3"
