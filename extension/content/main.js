@@ -13,7 +13,9 @@
   if (window.__screenmateLoaded) return;
   window.__screenmateLoaded = true;
 
-  const STEP_DELAY = 380;
+  // Just enough for a framework to settle between writes; any longer is only
+  // waiting for its own sake.
+  const STEP_DELAY = 120;
   const MAX_STEPS = 8;
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -51,6 +53,13 @@
     needsPrefs: false,
     /** Sensitive fields already settled this run — prevents re-asking forever. */
     resolvedSensitive: new Set(),
+    /** "fieldId::value" writes that already failed this run — never retried. */
+    failedWrites: new Set(),
+    /** Fields already reported as flagged or ungrounded, so later passes stay quiet. */
+    noted: new Set(),
+    /** Fields the agent has acted on or ruled out on this step, and its passes so far. */
+    addressed: new Set(),
+    passes: 0,
     stats: EMPTY_STATS(),
   };
 
@@ -221,7 +230,17 @@
 
   /* ---------------- research ---------------- */
 
-  async function runResearch() {
+  // Trimmed to the route's limits: a real posting URL is routinely longer than
+  // roleId's 60 characters, and one over-long field fails the request.
+  const researchRequest = () =>
+    api("research", {
+      company: (S.context.company || "this company").slice(0, 120),
+      role: (S.context.jobTitle || "this role").slice(0, 120),
+      roleId: (S.context.url || "").slice(0, 60),
+    });
+
+  /** `pending` is a request already started alongside the plan, if any. */
+  async function runResearch(pending) {
     if (S.research) {
       log("think", "Research reused", "Context for this company is already loaded.");
       markStep("research", "done");
@@ -229,11 +248,7 @@
     }
     setStatus("researching");
     markStep("research", "active");
-    const res = await api("research", {
-      company: S.context.company,
-      role: S.context.jobTitle,
-      roleId: S.context.url,
-    });
+    const res = await (pending || researchRequest());
     if (!res.ok) {
       log("warn", "External research unavailable", "Continuing without it.");
       markStep("research", "skipped");
@@ -259,6 +274,22 @@
     if (S.resolvedSensitive.has(field.id)) return;
     if (S.approvalQueue.some((a) => a.fieldId === field.id)) return;
 
+    // An upload is yours to attach: pause and offer the page's own picker.
+    // Nothing is ever uploaded for you, and there is nothing to type.
+    if (field.type === "file") {
+      S.approvalQueue.push({
+        fieldId: field.id,
+        label: field.label,
+        reason:
+          "Attach it yourself: SCREENMATE opens this page's own file picker and never uploads anything for you.",
+        options: null,
+        topic: null,
+        free: false,
+        kind: "file",
+      });
+      return;
+    }
+
     let options = null;
     let free = true;
     if (field.type === "select") {
@@ -276,7 +307,9 @@
       label: field.label,
       reason: field.sensitiveReason || reason || "",
       options: free ? null : options,
-      topic: field.topic || null,
+      // An essay that merely mentions a topic word ("a race condition you
+      // debugged") must not be remembered as your answer for that topic.
+      topic: field.type === "textarea" ? null : field.topic || null,
       free,
     });
   }
@@ -315,31 +348,47 @@
         await queueApproval(field, "Your standing answer had no match here.");
         continue;
       }
+      const landed = res.chosen || hit.value;
+      // Wait out the widget before re-reading: a dropdown commits its choice
+      // a beat after the click.
+      await sleep(60);
+      const check = window.__screenmateAct.verifyWrite(field, landed);
+      if (!check.ok) {
+        // Never report an answer the page does not actually hold.
+        log(
+          "warn",
+          `Your saved answer did not stick on ${field.label}`,
+          `${check.summary} — handing it to you.`,
+        );
+        await queueApproval(field, "Your standing answer could not be set on this control.");
+        continue;
+      }
       window.__screenmateAct.highlight(field.el);
-      const check = window.__screenmateAct.verifyWrite(field, hit.value);
       field.value = check.actual;
       S.resolvedSensitive.add(field.id);
       S.stats.userDecisions += 1;
-      if (check.ok) S.stats.verifiedActions += 1;
+      S.stats.verifiedActions += 1;
 
       S.changes.push({
         fieldId: field.id,
         label: field.label,
         before: "",
-        after: hit.value,
-        verified: check.ok,
+        after: landed,
+        verified: true,
         level: field.level,
         step: S.step,
         fromPreference: true,
+        // Lets Edit offer the real choices instead of a free-text box.
+        options: field.type === "select" ? field.options : undefined,
       });
 
       log(
         "prefs",
         `${field.label} answered from your saved preference`,
-        `"${hit.value}" — your standing answer, not the agent's judgement.`,
+        `"${landed}" — your standing answer, not the agent's judgement.`,
       );
       handled += 1;
-      await sleep(240);
+      await sleep(60);
       if (stale(gen)) return handled;
     }
     return handled;
@@ -352,7 +401,19 @@
       return;
     }
 
+    // A question the agent should not answer for you, most often one asking
+    // about experience your profile does not describe. Say so once.
+    if (action.tool === "flagIssue") {
+      if (!S.noted.has(`flag:${field.id}`)) {
+        S.noted.add(`flag:${field.id}`);
+        log("warn", `${field.label} needs you`, action.args?.message || "Left for you to answer.");
+      }
+      return;
+    }
+
     if (action.tool === "requestUserApproval") {
+      // Settled earlier in this run: the model asking again is not news.
+      if (S.resolvedSensitive.has(field.id)) return;
       await queueApproval(field, action.args.reason);
       log("lock", `${field.label} requires user input`, field.sensitiveReason);
       markStep("approval", "active");
@@ -362,7 +423,9 @@
     // Client-side backstop. The server already rewrites these; the tool layer
     // refuses independently — the same three-layer guarantee as the web app.
     if (field.sensitive) {
-      log("lock", `Blocked: ${field.label} is user-only`, "Requesting your decision.");
+      if (!S.resolvedSensitive.has(field.id)) {
+        log("lock", `Blocked: ${field.label} is user-only`, "Requesting your decision.");
+      }
       await queueApproval(field);
       return;
     }
@@ -370,45 +433,70 @@
     const value = (action.args?.value || "").trim();
     if (!value) return;
 
+    // A question the agent already said it cannot answer honestly stays
+    // yours: a later pass does not get to change its mind and write one.
+    if (S.noted.has(`flag:${field.id}`)) return;
+
+    // The same write already failed this run; a second pass asking for it
+    // again would only fail again, louder.
+    const attempt = `${field.id}::${value}`;
+    if (S.failedWrites.has(attempt)) return;
+
     const before = field.value || "";
     const written = await window.__screenmateAct.applyWrite(field, value);
     if (!written.ok) {
+      S.failedWrites.add(attempt);
       log("warn", `Could not write ${field.label}`, written.reason);
       return;
     }
+    // A suggestion menu may have put the site's own wording in the field
+    // ("Atlanta, GA, USA"); that is what the page holds and what we check.
+    let landed = written.chosen || value;
     window.__screenmateAct.highlight(field.el);
     log(
       "write",
       `${field.label} completed`,
-      value.length > 90 ? `${value.slice(0, 89)}…` : value,
+      landed.length > 90 ? `${landed.slice(0, 89)}…` : landed,
     );
 
     setStatus("verifying");
-    await sleep(200);
+    await sleep(80);
     if (stale(gen)) return;
 
-    let check = window.__screenmateAct.verifyWrite(field, value);
+    let check = window.__screenmateAct.verifyWrite(field, landed);
     if (!check.ok) {
       log("warn", "Verification failed — retrying once", check.summary, true);
-      await window.__screenmateAct.applyWrite(field, value);
-      await sleep(240);
-      check = window.__screenmateAct.verifyWrite(field, value);
+      const retry = await window.__screenmateAct.applyWrite(field, value);
+      landed = retry.chosen || value;
+      await sleep(150);
+      check = window.__screenmateAct.verifyWrite(field, landed);
     }
 
     field.value = check.actual;
-    if (check.ok) S.stats.verifiedActions += 1;
-    if (field.level === "review") S.stats.reviewedSuggestions += 1;
-    else S.stats.safeFields += 1;
+    if (!check.ok) S.failedWrites.add(attempt);
 
-    S.changes.push({
-      fieldId: field.id,
-      label: field.label,
-      before,
-      after: value,
-      verified: check.ok,
-      level: field.level,
-      step: S.step,
-    });
+    // A second pass that rewrites the same field updates its entry, keeping
+    // the original value so a revert still restores what the page first held.
+    const earlier = S.changes.find((c) => c.fieldId === field.id);
+    if (check.ok && !earlier?.verified) S.stats.verifiedActions += 1;
+    if (!earlier) {
+      if (field.level === "review") S.stats.reviewedSuggestions += 1;
+      else S.stats.safeFields += 1;
+    }
+    if (earlier) {
+      Object.assign(earlier, { after: landed, verified: check.ok, level: field.level });
+    } else {
+      S.changes.push({
+        fieldId: field.id,
+        label: field.label,
+        before,
+        after: landed,
+        verified: check.ok,
+        level: field.level,
+        step: S.step,
+        options: field.type === "select" ? field.options : undefined,
+      });
+    }
 
     log(
       check.ok ? "verify" : "warn",
@@ -429,12 +517,22 @@
     if (stale(gen)) return "stale";
 
     const plan = res.data;
+    S.passes += 1;
     log("think", "Decision", plan.decisionSummary);
-    if (plan.dropped?.length) {
+    const droppedFields = (plan.dropped || [])
+      .map((d) => S.fields.find((f) => String(d).startsWith(`${f.id}:`)))
+      .filter(Boolean);
+    // Everything the agent touched or was stopped on has had its turn.
+    for (const a of plan.actions) if (a.args?.fieldId) S.addressed.add(a.args.fieldId);
+    for (const f of droppedFields) S.addressed.add(f.id);
+    // Name the fields, and only once: a later pass tends to retry the same ones.
+    const dropped = droppedFields.filter((f) => !S.noted.has(`dropped:${f.id}`));
+    if (dropped.length) {
+      dropped.forEach((f) => S.noted.add(`dropped:${f.id}`));
       log(
         "warn",
-        `${plan.dropped.length} ungrounded write${plan.dropped.length === 1 ? "" : "s"} discarded`,
-        "Values were not present in your profile.",
+        `${dropped.length} ungrounded write${dropped.length === 1 ? "" : "s"} discarded`,
+        `${dropped.map((f) => f.label).join(" · ")} — the value was not in your profile, so it is left for you.`,
       );
     }
 
@@ -447,6 +545,8 @@
         await runResearch();
         continue;
       }
+      // The page loop validates every step itself once the pass ends.
+      if (action.tool === "validateApplication") continue;
       await applyAction(action, gen);
     }
     markStep("fill", "done");
@@ -516,6 +616,72 @@
     S.stats.pagesCompleted = S.pages.length;
   }
 
+  const isOpen = (f) => !(f.value || "").trim();
+
+  /** An open question the agent writes prose for: the only kind research serves. */
+  const hasOpenNarrative = () =>
+    S.fields.some((f) => f.type === "textarea" && !f.sensitive && isOpen(f));
+
+  /** Required, non-sensitive, still empty, and not yet acted on this step. */
+  const untouchedOpen = () =>
+    S.fields.filter((f) => f.required && !f.sensitive && isOpen(f) && !S.addressed.has(f.id));
+
+  /**
+   * A step with nothing the agent may fill: every open field is a decision of
+   * yours. The model could only hand them back, so do that directly.
+   */
+  async function handBackOpen() {
+    S.passes += 1;
+    const yours = S.fields.filter((f) => isOpen(f) && f.sensitive);
+    log(
+      "think",
+      "Decision",
+      yours.length
+        ? "Nothing here for the agent to fill; the rest of this step is yours to answer."
+        : "Nothing left to fill on this step.",
+    );
+    for (const f of yours) {
+      // queueApproval notes files once and never asks the same question twice.
+      const already = S.resolvedSensitive.has(f.id);
+      await queueApproval(f, f.sensitiveReason);
+      if (!already) {
+        log("lock", `${f.label} requires user input`, f.sensitiveReason);
+        markStep("approval", "active");
+      }
+    }
+    if (S.approvalQueue.length) {
+      setStatus("waiting");
+      return "waiting";
+    }
+    return "done";
+  }
+
+  /**
+   * The plan for a step with no open free-text question. Research cannot be
+   * needed there, and a model's plan could only restate what the page already
+   * shows — so the step goes straight to work instead of waiting on it.
+   */
+  function localPlan() {
+    const open = S.fields.filter(isOpen);
+    const yours = open.filter((f) => f.sensitive && f.type !== "file").length;
+    const steps = [
+      { kind: "observe", label: "Read the live form" },
+      { kind: "fill", label: "Fill known profile fields" },
+    ];
+    if (yours) steps.push({ kind: "approval", label: "Apply your answers, ask the rest" });
+    steps.push({ kind: "validate", label: "Validate this step" });
+    const role = [S.context.jobTitle, S.context.company].filter(Boolean).join(" at ");
+    return {
+      goal: `Complete the ${role || "application"} application from your profile, leaving your decisions to you.`.slice(0, 150),
+      observation: `${open.length} of ${S.fields.length} fields are open${
+        yours ? `, ${yours} of them yours to decide` : ""
+      }.`,
+      steps,
+      researchNeeded: false,
+      researchRationale: "No open question depends on company context, so research is skipped.",
+    };
+  }
+
   /* ---------------- the page loop ---------------- */
 
   /**
@@ -531,19 +697,34 @@
         setStatus("observing");
         if (!(await observe())) return "error";
         S.observedSig = window.__screenmateScan.pageSignature();
+        S.addressed = new Set();
+        S.passes = 0;
         await sleep(STEP_DELAY);
         if (stale(gen)) return "stale";
 
-        // Plan per step: each page of a wizard asks for different things.
+        // Plan per step: each page of a wizard asks for different things. The
+        // model's plan is worth its round-trip only when research might be
+        // needed, which takes an open free-text question.
         setStatus("planning");
-        const res = await api("agent", payload("plan"));
-        if (!res.ok) {
-          failAgent(res);
-          return "error";
+        let plan;
+        let early = null;
+        if (hasOpenNarrative()) {
+          // Research is only ever wanted for an open free-text question, and
+          // this step has one, so it starts now, alongside the plan: the two
+          // waits overlap instead of adding up. The plan still decides whether
+          // the result is used.
+          if (!S.research) early = researchRequest();
+          const res = await api("agent", payload("plan"));
+          if (!res.ok) {
+            failAgent(res);
+            return "error";
+          }
+          if (stale(gen)) return "stale";
+          plan = res.data;
+        } else {
+          plan = localPlan();
         }
-        if (stale(gen)) return "stale";
 
-        const plan = res.data;
         if (!S.goal) S.goal = plan.goal;
         S.steps = plan.steps.map((s) => ({ ...s, status: "pending" }));
         log("observe", "Observation", plan.observation);
@@ -551,7 +732,7 @@
 
         if (plan.researchNeeded) {
           log("research", "Research required", plan.researchRationale);
-          await runResearch();
+          await runResearch(early);
         } else {
           log("think", "Context check", plan.researchRationale);
           markStep("research", "skipped");
@@ -569,14 +750,18 @@
       }
       if (stale(gen)) return "stale";
 
-      let outcome = await runPass(gen);
+      // Back here after your answer, the agent has already had its turn at
+      // everything else on this step; another call could only repeat itself.
+      // And a step where every open field is yours needs no model at all.
+      let outcome;
+      if (S.passes > 0 && !untouchedOpen().length) outcome = "done";
+      else if (!S.fields.some((f) => isOpen(f) && !f.sensitive)) outcome = await handBackOpen();
+      else outcome = await runPass(gen);
       let extra = 0;
       while (outcome === "done" && extra < 1) {
         extra += 1;
-        const open = S.fields.filter(
-          (f) => f.required && !f.sensitive && !(f.value || "").trim(),
-        );
-        if (!open.length) break;
+        // A second pass only for required fields the first one never touched.
+        if (!untouchedOpen().length) break;
         outcome = await runPass(gen);
       }
       if (outcome !== "done") return outcome;
@@ -688,11 +873,19 @@
 
     if (field) {
       const res = await window.__screenmateAct.applyWrite(field, value);
-      if (res.ok) {
+      await sleep(60);
+      const check = res.ok
+        ? window.__screenmateAct.verifyWrite(field, res.chosen || value)
+        : null;
+      if (check?.ok) {
         window.__screenmateAct.highlight(field.el);
-        field.value = window.__screenmateAct.verifyWrite(field, value).actual;
+        field.value = check.actual;
       } else {
-        log("warn", `Could not write your answer to ${field.label}`, res.reason);
+        log(
+          "warn",
+          `Could not set your answer on ${field.label}`,
+          `${res.ok ? check.summary : res.reason} — set it on the page yourself.`,
+        );
       }
     }
     S.stats.userDecisions += 1;
@@ -727,12 +920,8 @@
     }
   }
 
-  /** Leaves an optional sensitive question blank and moves on. */
-  function skipApproval() {
-    const req = S.approvalQueue.shift();
-    if (!req) return;
-    S.resolvedSensitive.add(req.fieldId);
-    log("lock", `${req.label} left blank`, "You chose not to answer it.");
+  /** Picks the run back up once the last pending question is settled. */
+  function resumeAfterApproval() {
     if (S.approvalQueue.length) return paint();
     markStep("approval", "done");
     if (S.running) return;
@@ -747,6 +936,51 @@
         if (!stale(gen)) S.running = false;
       }
     })();
+  }
+
+  /**
+   * Opens the page's own file picker for an upload question. The file is
+   * chosen by you and handed to the page by the browser; the extension never
+   * reads or sends it. Must stay synchronous: the picker only opens inside
+   * the click that asked for it.
+   */
+  function pickFile() {
+    const req = S.approvalQueue[0];
+    const field = req && S.fields.find((f) => f.id === req.fieldId);
+    const input = field?.el;
+    if (!input?.isConnected) return;
+    if (S.filePick) input.removeEventListener("change", S.filePick);
+    S.filePick = () => {
+      const file = input.files?.[0];
+      if (!file) return; // picker cancelled: the question stays open
+      input.removeEventListener("change", S.filePick);
+      S.filePick = null;
+      if (S.approvalQueue[0]?.fieldId !== req.fieldId) return;
+      S.approvalQueue.shift();
+      S.resolvedSensitive.add(req.fieldId);
+      S.stats.userDecisions += 1;
+      field.value = `${input.files.length} file selected`;
+      window.__screenmateAct.highlight(
+        input.closest("li, [class*=question], [class*=field]") || input,
+      );
+      log("success", `${req.label} attached`, `"${file.name}", chosen by you.`);
+      resumeAfterApproval();
+    };
+    input.addEventListener("change", S.filePick);
+    input.click();
+  }
+
+  /** Leaves an optional sensitive question blank and moves on. */
+  function skipApproval() {
+    const req = S.approvalQueue.shift();
+    if (!req) return;
+    S.resolvedSensitive.add(req.fieldId);
+    log(
+      "lock",
+      `${req.label} left blank`,
+      req.kind === "file" ? "You chose not to attach a file." : "You chose not to answer it.",
+    );
+    resumeAfterApproval();
   }
 
   /** Writes a user-corrected value straight to the page. */
@@ -767,11 +1001,12 @@
       return;
     }
     window.__screenmateAct.highlight(field.el);
-    const check = window.__screenmateAct.verifyWrite(field, text);
+    const landed = res.chosen || text;
+    const check = window.__screenmateAct.verifyWrite(field, landed);
     field.value = check.actual;
 
     if (change) {
-      change.after = text;
+      change.after = landed;
       change.verified = check.ok;
       // Once you have edited it, it is your value, not a suggestion.
       change.fromPreference = false;
@@ -831,7 +1066,12 @@
     const field = S.fields.find((f) => f.id === fieldId);
     if (!change || !field) return;
 
-    await window.__screenmateAct.applyWrite(field, change.before || "");
+    const res = await window.__screenmateAct.applyWrite(field, change.before || "");
+    if (!res.ok) {
+      // Keep it listed: it is still on the page.
+      log("warn", `Could not revert ${change.label}`, res.reason || "Change it back on the page.");
+      return;
+    }
     field.value = change.before || "";
     S.changes = S.changes.filter((c) => c.fieldId !== fieldId);
     S.resolvedSensitive.add(fieldId);
@@ -841,11 +1081,13 @@
   }
 
   async function revertAll() {
+    const stuck = [];
     for (const c of S.changes) {
       const field = S.fields.find((f) => f.id === c.fieldId);
       if (field) {
-        await window.__screenmateAct.applyWrite(field, c.before || "");
-        field.value = c.before || "";
+        const res = await window.__screenmateAct.applyWrite(field, c.before || "");
+        if (res.ok) field.value = c.before || "";
+        else stuck.push(c);
       }
     }
     log(
@@ -853,7 +1095,15 @@
       "Agent changes reverted on this step",
       "Earlier steps are left as they are — navigate back to change those.",
     );
-    S.changes = S.changes.filter((c) => c.step !== S.step);
+    if (stuck.length) {
+      log(
+        "warn",
+        `${stuck.length} could not be reverted automatically`,
+        `${stuck.map((c) => c.label).join(", ")} — change these back on the page.`,
+      );
+    }
+    // Anything that could not be put back is still on the page, so it stays listed.
+    S.changes = S.changes.filter((c) => c.step !== S.step || stuck.includes(c));
     S.report = validate();
     setStatus("complete");
   }
@@ -885,6 +1135,10 @@
       submitHandoff: null,
       needsPrefs: false,
       resolvedSensitive: new Set(),
+      failedWrites: new Set(),
+      noted: new Set(),
+      addressed: new Set(),
+      passes: 0,
       stats: EMPTY_STATS(),
     });
     void observe().then(() => {
@@ -900,6 +1154,9 @@
       S.panel.toggle(false);
       return;
     }
+    // This page is an application: wake the backend now, while the person is
+    // still reading, so the first Run does not wait on a cold start.
+    chrome.runtime.sendMessage({ type: "screenmate:warm" }, () => void chrome.runtime.lastError);
     const info = await new Promise((r) =>
       chrome.runtime.sendMessage({ type: "screenmate:getProfile" }, r),
     );
@@ -912,6 +1169,7 @@
         onRescan: () => reset(),
         onAnswer: (v, remember) => void answer(v, remember),
         onSkip: () => skipApproval(),
+        onPickFile: () => pickFile(),
         onSetPref: (topic, value) => void setPref(topic, value),
         onPrefsDone: async (freeValues = {}) => {
           for (const [topic, value] of Object.entries(freeValues)) {
@@ -919,7 +1177,9 @@
           }
           S.prefs = await window.__screenmatePrefs.load();
           S.needsPrefs = false;
-          void run();
+          // Edited after a run: save them, do not start the agent over.
+          if (S.status === "idle" || S.status === "error") return void run();
+          log("prefs", "Standing answers updated", "They apply from the next run on.");
         },
         onEditPrefs: () => {
           S.needsPrefs = true;
@@ -991,6 +1251,8 @@
   const isTop = window === window.top;
   let electionTimer = null;
   const claims = [];
+  /** Top frame only: an embedded form won the election and owns the panel. */
+  let childOwnsPanel = false;
 
   function claimFrame(count) {
     const msg = { __screenmate: ELECTION, count, href: location.href };
@@ -1014,6 +1276,7 @@
         if (winner.source === window) {
           void mount({ collapsed: true });
         } else {
+          childOwnsPanel = true;
           try {
             winner.source.postMessage(
               { __screenmate: "screenmate:youWon" },
@@ -1046,9 +1309,12 @@
 
   chrome.runtime.onMessage.addListener((msg) => {
     if (msg?.type !== "screenmate:toggle" && msg?.type !== "screenmate:open") return;
-    // Opened by hand: whichever frame actually holds a form takes it.
+    // Opened by hand: whichever frame actually holds a form takes it. The top
+    // frame is the fallback, unless an embedded form already owns the panel —
+    // mounting there too would put two panels on the page.
     try {
-      if (S.panel || looksLikeApplication() || isTop) void mount();
+      const mine = isTop ? !childOwnsPanel : looksLikeApplication();
+      if (S.panel || mine) void mount();
     } catch {
       /* ignore */
     }

@@ -165,6 +165,18 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     return true; // keep the channel open for the async reply
   }
 
+  // Wakes the backend before the first real request. A hosted function that
+  // has gone idle takes seconds to boot; an OPTIONS preflight starts it
+  // without spending a model or search credit, so Run does not pay for it.
+  if (msg?.type === "screenmate:warm") {
+    backendConfig().then(({ base }) => {
+      for (const path of Object.values(ROUTES)) {
+        fetch(base + path, { method: "OPTIONS" }).catch(() => {});
+      }
+    });
+    return false;
+  }
+
   // CV upload is deliberately NOT proxied here: an MV3 service worker cannot
   // fetch a data: URL, and multipart has no reason to make the extra hop. The
   // popup is an extension page with the same host permissions, so it posts the

@@ -185,6 +185,8 @@
   padding:7px 9px; color:#eeeef2; font:inherit; font-size:12px; outline:none; resize:vertical;
 }
 .efield:focus { border-color:#7c6cf5; }
+@keyframes sm-attn { 0% { box-shadow: 0 0 0 0 rgba(216,163,80,.6); } 100% { box-shadow: 0 0 0 12px rgba(216,163,80,0); } }
+.attn { animation: sm-attn 1.1s ease-out 2; }
 `;
 
   const ICONS = {
@@ -462,7 +464,7 @@
 
   ${
     needsPrefs
-      ? `<div class="sec">
+      ? `<div class="sec" data-question="prefs">
            <div class="lbl">Your standing answers</div>
            <div class="muted" style="line-height:1.55;margin-bottom:12px">
              Answer these once. SCREENMATE applies them on every application
@@ -494,7 +496,9 @@
                </div>`;
              })
              .join("")}
-           <button class="btn" data-act="prefsDone">Save and run</button>
+           <button class="btn" data-act="prefsDone">${
+             status === "idle" || status === "error" ? "Save and run" : "Save answers"
+           }</button>
          </div>`
       : ""
   }
@@ -515,17 +519,24 @@
         ? `<button class="btn ghost" data-act="rescan">Rescan page</button>`
         : ""
     }
+    ${
+      !needsPrefs && ["idle", "complete", "reviewing", "error"].includes(status)
+        ? `<button class="disc" data-act="editPrefs">Edit standing answers</button>`
+        : ""
+    }
   </div>
 
   ${
     approval
-      ? `<div class="sec warn">
+      ? `<div class="sec warn" data-question="approval:${esc(approval.fieldId)}">
            <div class="lbl w">User decision required</div>
            <div class="card">
              <div class="q">${esc(approval.label)}</div>
              <div class="why">SCREENMATE paused here. ${esc(approval.reason)}</div>
              ${
-               approval.free
+               approval.kind === "file"
+                 ? `<div class="opts"><button class="opt" data-act="pickFile">Choose file…</button></div>`
+                 : approval.free
                  ? `<div class="opts"><input class="afree" placeholder="Type your answer">
                       <button class="opt" data-act="answerFree">Save</button></div>`
                  : `<div class="opts">${(approval.options?.length
@@ -555,7 +566,7 @@
 
   ${
     changes.length
-      ? `<div class="sec">
+      ? `<div class="sec"${status === "reviewing" ? ' data-question="review"' : ""}>
            <div class="lbl">${status === "reviewing" ? "Review changes" : "Changes on this step"}</div>
            <div class="muted" style="margin-bottom:10px">
              ${changes.length} field${changes.length === 1 ? "" : "s"} written. Edit anything that is wrong — nothing is submitted.
@@ -581,7 +592,16 @@
                  <button class="mini" data-act="revertOne" data-field="${esc(c.fieldId)}">Revert</button>
                </div>
                <div class="editor" data-editor="${esc(c.fieldId)}" hidden>
-                 <textarea class="efield" rows="4">${esc(c.after)}</textarea>
+                 ${
+                   c.options?.length
+                     ? `<select class="efield">${c.options
+                         .map(
+                           (o) =>
+                             `<option${o === c.after ? " selected" : ""}>${esc(o)}</option>`,
+                         )
+                         .join("")}</select>`
+                     : `<textarea class="efield" rows="4">${esc(c.after)}</textarea>`
+                 }
                  <div class="cacts">
                    <button class="mini go" data-act="saveEdit" data-field="${esc(c.fieldId)}">Save to page</button>
                    <button class="mini" data-act="cancelEdit" data-field="${esc(c.fieldId)}">Cancel</button>
@@ -687,6 +707,30 @@
 
       this.bind();
       this.restoreUi(ui, Boolean(s.autoscroll));
+      this.revealQuestion();
+    }
+
+    /**
+     * A question for you never sits out of sight. When a new one appears (an
+     * approval, the standing-answers setup, the final review), the panel opens
+     * and scrolls it to the top.
+     */
+    revealQuestion() {
+      const card = this.root.querySelector("[data-question]");
+      const key = card?.dataset.question || null;
+      if (key === this.shownQuestion) return;
+      if (!card) {
+        this.shownQuestion = null;
+        return;
+      }
+      // Expanding re-renders, which comes straight back here, now open.
+      if (this.collapsed) return this.toggle(false);
+      this.shownQuestion = key;
+      const body = this.root.querySelector(".body");
+      if (body) {
+        body.scrollTop += card.getBoundingClientRect().top - body.getBoundingClientRect().top - 6;
+      }
+      card.classList.add("attn");
     }
 
     /** Attribute selectors need escaping; matching on dataset does not. */
@@ -720,6 +764,8 @@
             return;
           }
           if (act === "skip") return this.handlers.onSkip?.();
+          // Synchronous on purpose: the page's file picker only opens inside this click.
+          if (act === "pickFile") return this.handlers.onPickFile?.();
           if (act === "editChange" || act === "cancelEdit") {
             const box = this.editorFor(el.dataset.field);
             if (box) box.hidden = act === "cancelEdit" ? true : !box.hidden;
@@ -732,6 +778,7 @@
             return this.handlers.onEditChange?.(el.dataset.field, v);
           }
           if (act === "regen") return this.handlers.onRegenerate?.(el.dataset.field);
+          if (act === "editPrefs") return this.handlers.onEditPrefs?.();
           if (act === "revertOne") return this.handlers.onRevertOne?.(el.dataset.field);
           if (act === "pref") {
             return this.handlers.onSetPref?.(el.dataset.topic, el.dataset.val);

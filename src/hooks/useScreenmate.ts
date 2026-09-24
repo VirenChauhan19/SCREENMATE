@@ -45,8 +45,9 @@ export interface ContextAlert {
 }
 
 const MAX_PASSES = 3;
-const STEP_DELAY = 460;
-const VERIFY_DELAY = 240;
+// Just enough for a controlled field to settle; any longer is only waiting.
+const STEP_DELAY = 120;
+const VERIFY_DELAY = 80;
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
