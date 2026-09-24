@@ -78,9 +78,12 @@ const SENSITIVE_TOPICS = [
   "disability",
   "veteran",
   "gender",
-  "race",
   "ethnicity",
   "demographic",
+  "lgbt",
+  "sexual orientation",
+  "transgender",
+  "pronoun",
   "salary",
   "compensation",
   "pay expectation",
@@ -91,9 +94,22 @@ const SENSITIVE_TOPICS = [
   "date of birth",
 ];
 
+/**
+ * "race" as a word — not inside "embrace", "trace" or "grace", and not the
+ * engineering sense in "race condition". Letter boundaries rather than \b, so
+ * an id like `eeo_race` still counts.
+ */
+const RACE = /(^|[^a-z])rac(e|es|ial)(?![a-z])(?!\s*conditions?\b)/i;
+
+/**
+ * "sex" as a whole word: "Sex", "eeo_sex" — not "Essex", and not "sexual
+ * orientation", which is its own protected question rather than a gender one.
+ */
+const SEX = /(^|[^a-z])sex(?![a-z])/i;
+
 export function isSensitiveTopic(fieldId: string, label: string): boolean {
   const haystack = `${fieldId} ${label}`.toLowerCase();
-  return SENSITIVE_TOPICS.some((topic) => haystack.includes(topic));
+  return SENSITIVE_TOPICS.some((topic) => haystack.includes(topic)) || RACE.test(haystack);
 }
 
 /**
@@ -136,8 +152,8 @@ const TOPIC_MATCHERS: { topic: PreferenceTopic; match: RegExp }[] = [
   { topic: "salary", match: /salary|compensation|pay expectation|desired (base|rate)|hourly rate/i },
   { topic: "startDate", match: /start date|available to start|availability date|earliest start/i },
   { topic: "noticePeriod", match: /notice period|notice required/i },
-  { topic: "gender", match: /gender|sex/i },
-  { topic: "ethnicity", match: /ethnic|race|hispanic|latino/i },
+  { topic: "gender", match: new RegExp(`gender|${SEX.source}`, "i") },
+  { topic: "ethnicity", match: new RegExp(`ethnic|hispanic|latino|${RACE.source}`, "i") },
   { topic: "veteran", match: /veteran|military service/i },
   { topic: "disability", match: /disabilit/i },
   { topic: "criminalHistory", match: /criminal|felony|conviction|background check/i },

@@ -150,6 +150,15 @@ async function main() {
   for (const id of approvals) state = setFieldByUser(state, id, "No");
   console.log(`after user: ${state.completedFields}/${state.totalFields}`);
 
+  /* follow-up passes, as the hook runs them: while a required, non-sensitive field is still empty */
+  for (let pass = 2; pass <= 4; pass++) {
+    const stillOpen = state.fields.filter((f) => f.required && !hasValue(f) && !f.sensitive);
+    if (stillOpen.length === 0) break;
+    approvals = await runPass(`pass ${pass}`);
+    for (const id of approvals) state = setFieldByUser(state, id, "No");
+    console.log(`after pass ${pass}: ${state.completedFields}/${state.totalFields}`);
+  }
+
   /* review */
   for (const c of changes) state = acceptField(state, c.fieldId);
 

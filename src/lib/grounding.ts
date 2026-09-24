@@ -29,6 +29,14 @@ export function knownValues(profile: ProfileLike): Set<string> {
     flat.push(`${degree}, minor in ${minor}`, `${degree} (minor: ${minor})`);
   }
 
+  // Most real forms split the name. First and last word of the stored name
+  // are still copied, not invented.
+  const name = (profile as UserProfile).name;
+  if (typeof name === "string") {
+    const parts = name.trim().split(/\s+/);
+    if (parts.length > 1) flat.push(parts[0], parts[parts.length - 1]);
+  }
+
   return new Set(flat.filter(Boolean).map(normalize));
 }
 
