@@ -136,11 +136,15 @@ const TOPIC_MATCHERS: { topic: PreferenceTopic; match: RegExp }[] = [
   { topic: "salary", match: /salary|compensation|pay expectation|desired (base|rate)|hourly rate/i },
   { topic: "startDate", match: /start date|available to start|availability date|earliest start/i },
   { topic: "noticePeriod", match: /notice period|notice required/i },
-  { topic: "gender", match: /gender|sex/i },
+  // Before gender: "Are you a registered sex offender?" is a legal-history question.
+  {
+    topic: "criminalHistory",
+    match: /criminal|felony|conviction|background check|offender|offen[cs]e/i,
+  },
+  { topic: "gender", match: /\bgender\b|\bsex\b/i },
   { topic: "ethnicity", match: /ethnic|race|hispanic|latino/i },
   { topic: "veteran", match: /veteran|military service/i },
   { topic: "disability", match: /disabilit/i },
-  { topic: "criminalHistory", match: /criminal|felony|conviction|background check/i },
   { topic: "referralSource", match: /how did you (hear|find)|referral source|where did you hear/i },
 ];
 

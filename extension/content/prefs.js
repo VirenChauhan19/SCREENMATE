@@ -88,9 +88,13 @@
     },
   ];
 
-  const YES = /^(yes|y|true|i am|i do)\b/i;
-  const NO = /^(no|n|false|i am not|i do not|i don'?t)\b/i;
-  const DECLINE = /(do not wish|prefer not|decline|choose not)/i;
+  /**
+   * A decline, however the site words it: "I don't wish to answer", "I do not
+   * want to answer", "Decline to self-identify". "No, I do not want to
+   * relocate" is an answer, not a decline.
+   */
+  const DECLINE =
+    /\bdecline|\b(do not|don['’]?t|prefer not|choose not|rather not)\b.*\b(answer|disclose|say|identify|provide|share|respond)\b/i;
 
   const norm = (s) =>
     String(s || "")
@@ -98,10 +102,22 @@
       .trim()
       .toLowerCase();
 
+  /** True when `option` begins with the words of `lead`: "No" leads "No, I…", not "None". */
+  function leads(option, lead) {
+    const o = norm(option);
+    const l = norm(lead);
+    return o.startsWith(l) && !/[\p{L}\p{N}]/u.test(o.charAt(l.length));
+  }
+
   /**
    * Maps a stored answer onto whatever wording this particular site uses.
    * "No" has to match "No, I do not require sponsorship"; "I do not wish to
    * answer" has to match "Decline to self-identify".
+   *
+   * Returns null rather than guess, and the question goes to the user. These
+   * are protected questions: looser matching once turned "I do not wish to
+   * answer" into "Yes, I have a disability", and "Hispanic or Latino" into
+   * "No" because "Latino" contains "no".
    */
   function matchOption(answer, options) {
     if (!options || options.length === 0) return answer;
@@ -110,26 +126,17 @@
     const exact = options.find((o) => norm(o) === a);
     if (exact) return exact;
 
-    const prefix = options.find((o) => norm(o).startsWith(a) || a.startsWith(norm(o)));
-    if (prefix) return prefix;
+    // A decline maps onto a decline and nothing else.
+    if (DECLINE.test(answer)) return options.find((o) => DECLINE.test(o)) || null;
+    const answers = options.filter((o) => !DECLINE.test(o));
 
-    if (DECLINE.test(answer)) {
-      const decline = options.find((o) => DECLINE.test(o));
-      if (decline) return decline;
-    }
-    if (YES.test(answer)) {
-      const yes = options.find((o) => YES.test(o) && !NO.test(o));
-      if (yes) return yes;
-    }
-    if (NO.test(answer)) {
-      const no = options.find((o) => NO.test(o));
-      if (no) return no;
-    }
+    // The same answer, decorated: "No" → "No, I do not require sponsorship".
+    const decorated = answers.find((o) => leads(o, answer));
+    if (decorated) return decorated;
 
-    const contains = options.find(
-      (o) => norm(o).includes(a) || (a.length > 3 && a.includes(norm(o))),
-    );
-    return contains || null;
+    // An explicit Yes or No carries over: "No, I do not have a disability" → "No".
+    const yesNo = a.match(/^(yes|no)\s*(,|$)/);
+    return yesNo ? answers.find((o) => leads(o, yesNo[1])) || null : null;
   }
 
   /**

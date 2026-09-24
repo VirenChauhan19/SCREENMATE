@@ -182,7 +182,10 @@ sufficient:
 
 A fourth guard covers hallucination: outside free-text answers, every value the agent
 writes must appear **verbatim** in the user profile. It cannot invent a school, a
-date, a URL, or a skill. Skills are checked token by token.
+date, a URL, or a skill. Skills are checked token by token. Two allowances, both
+still your own data: a form that splits your name may take part of it ("Viren" for
+First Name), and your phone number may be punctuated differently or lose its country
+code beside a separate country-code picker. No digit is ever added or changed.
 
 **Confidence** is a property of the action, not the field — it records how directly a
 written value traces back to stored data:
@@ -403,6 +406,11 @@ Answers are matched by topic, not by wording, so "No" set once also answers
 on a custom dropdown, the extension opens it and reads the real options — it will
 not guess "Yes/No" at a question whose answers are nothing of the kind.
 
+Matching never guesses. "I do not wish to answer" maps only onto that site's
+decline, however it is worded ("I do not want to answer", "Decline to
+self-identify"), and anything ambiguous comes back to you instead of being filled.
+`npm run rules:check` holds this against real portal wording.
+
 ### Chrome extension
 
 1. `npm run dev` — the extension needs the backend for the agent, research, and
@@ -428,6 +436,7 @@ Both keys are read only in server routes. Nothing reaches the client.
 
 ```bash
 npm run typecheck      # tsc --noEmit
+npm run rules:check    # grounding + standing-answer matching, no backend needed
 npm run build          # production build
 npm run e2e            # drives the real APIs end-to-end, asserts the outcome
 npm run fixture:serve  # serves fixtures/apply.html on :8099

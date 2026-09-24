@@ -50,8 +50,8 @@ const BACKEND = process.argv[2] || "http://localhost:3000";
 
       // Wipe the profile fields so the diff has something to show.
       await popup.evaluate(() => {
-        ["name", "email", "location", "university", "degree", "minor",
-         "graduationDate", "portfolio", "linkedin"].forEach((id) => {
+        ["name", "email", "phone", "location", "university", "degree", "minor",
+         "graduationDate", "portfolio", "linkedin", "github"].forEach((id) => {
           const el = document.getElementById(id);
           if (el) el.value = "";
         });

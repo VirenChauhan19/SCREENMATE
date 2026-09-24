@@ -1,6 +1,6 @@
 const FIELDS = [
-  "name", "email", "location", "university", "degree",
-  "minor", "graduationDate", "portfolio", "linkedin",
+  "name", "email", "phone", "location", "university", "degree",
+  "minor", "graduationDate", "portfolio", "linkedin", "github",
 ];
 
 async function load() {
@@ -162,10 +162,10 @@ document.getElementById("open").addEventListener("click", async () => {
 /* ---------------- CV import ---------------- */
 
 const CV_KEYS = [
-  ["name", "Name"], ["email", "Email"], ["location", "Location"],
-  ["university", "University"], ["degree", "Degree"], ["minor", "Minor"],
-  ["graduationDate", "Graduation"], ["portfolio", "Portfolio"],
-  ["linkedin", "LinkedIn"], ["skills", "Skills"],
+  ["name", "Name"], ["email", "Email"], ["phone", "Phone"],
+  ["location", "Location"], ["university", "University"], ["degree", "Degree"],
+  ["minor", "Minor"], ["graduationDate", "Graduation"], ["portfolio", "Portfolio"],
+  ["linkedin", "LinkedIn"], ["github", "GitHub"], ["skills", "Skills"],
 ];
 
 /**

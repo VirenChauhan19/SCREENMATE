@@ -29,7 +29,45 @@ export function knownValues(profile: ProfileLike): Set<string> {
     flat.push(`${degree}, minor in ${minor}`, `${degree} (minor: ${minor})`);
   }
 
+  // Forms that split the name ask for part of it. Any run of its words is
+  // still the user's own name, never an invented one.
+  const name = (profile as UserProfile).name;
+  if (typeof name === "string") {
+    const words = name.trim().split(/\s+/);
+    for (let i = 0; i < words.length; i++) {
+      for (let j = i + 1; j <= words.length; j++) {
+        flat.push(words.slice(i, j).join(" "));
+      }
+    }
+  }
+
   return new Set(flat.filter(Boolean).map(normalize));
+}
+
+const digits = (s: string) => s.replace(/\D/g, "");
+
+/**
+ * The profile's phone number, written the way this form wants it. Only the
+ * punctuation may differ, or the country code may be left to a separate
+ * country-code field. No digit is ever added or changed.
+ */
+function isProfilePhone(value: string, profile: ProfileLike): boolean {
+  const stored = (profile as Record<string, unknown>).phone;
+  if (typeof stored !== "string" || !/^\+?[\d\s().-]+$/.test(value.trim())) {
+    return false;
+  }
+  const want = digits(stored);
+  const got = digits(value);
+  if (got.length < 7) return false;
+  if (got === want) return true;
+
+  const dropped = want.length - got.length;
+  return (
+    stored.trim().startsWith("+") &&
+    dropped >= 1 &&
+    dropped <= 3 &&
+    want.endsWith(got)
+  );
 }
 
 /**
@@ -58,6 +96,7 @@ export function isGroundedValue(
   const v = normalize(value);
   // Trailing-slash tolerance for URLs.
   if (known.has(v) || known.has(v.replace(/\/+$/, ""))) return true;
+  if (isProfilePhone(value, profile)) return true;
 
   // On a page we did not design, a skills field is just type="text". A comma
   // list is still fully grounded as long as every item came from the profile —

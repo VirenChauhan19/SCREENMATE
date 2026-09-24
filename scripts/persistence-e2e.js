@@ -122,6 +122,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
       [
         "name",
         "email",
+        "phone",
         "location",
         "university",
         "degree",
@@ -129,6 +130,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
         "graduationDate",
         "portfolio",
         "linkedin",
+        "github",
       ].forEach((id) => {
         const el = document.getElementById(id);
         if (el) el.value = "";

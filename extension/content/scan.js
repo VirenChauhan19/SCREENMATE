@@ -51,6 +51,9 @@
 
   const cleanText = (s) => (s || "").replace(/\s+/g, " ").trim();
 
+  /** "Select...", "Please select", "-- Choose one --": a prompt, not an answer. */
+  const PLACEHOLDER = /^(--|(please\s+)?(select|choose|pick)\b)/i;
+
   /** Workday and friends hang stable hooks off data-automation-id. */
   const automationId = (el) =>
     el.getAttribute?.("data-automation-id") ||
@@ -261,7 +264,7 @@
     if (tag === "select") {
       return Array.from(el.options)
         .map((o) => cleanText(o.textContent))
-        .filter((t) => t && !/^(select|choose|--)/i.test(t))
+        .filter((t) => t && !PLACEHOLDER.test(t))
         .slice(0, 60);
     }
 
@@ -334,8 +337,11 @@
         : "";
     }
     if (tag === "select") {
-      const text = cleanText(el.selectedOptions?.[0]?.textContent);
-      return /^(select|choose|--)/i.test(text || "") ? "" : text || "";
+      // Reading "Please select" as an answer skipped the field and counted it
+      // complete. An empty option value is the markup's own placeholder.
+      const option = el.selectedOptions?.[0];
+      const text = cleanText(option?.textContent);
+      return !option || option.value === "" || PLACEHOLDER.test(text) ? "" : text;
     }
     if (role === "combobox" || role === "listbox") {
       // Workday renders the chosen value as the button's own text.
@@ -345,7 +351,7 @@
         // Custom controls fold their chevron into textContent.
         .replace(/[▾▴▼▲⌄⌃˅˄]+\s*$/, "")
         .trim();
-      return /^(select one|select|choose|--)/i.test(raw) ? "" : raw;
+      return PLACEHOLDER.test(raw) ? "" : raw;
     }
     if (el.isContentEditable) return cleanText(el.textContent);
     return el.value || "";
