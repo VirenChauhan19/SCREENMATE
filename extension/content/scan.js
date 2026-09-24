@@ -51,6 +51,19 @@
 
   const cleanText = (s) => (s || "").replace(/\s+/g, " ").trim();
 
+  /** "Select…", "Please select", "-- Choose --": prompts, not answers. */
+  const PLACEHOLDER = /^(please\s+)?(select|choose)|^--/i;
+
+  /**
+   * A native <select> marks its prompt with an empty value or a disabled first
+   * option, whatever the text says. Reading "Please select" as an answer is how
+   * a sensitive question gets skipped as already done.
+   */
+  const isPlaceholderOption = (o) =>
+    !o ||
+    (o.index === 0 && (o.value === "" || o.disabled)) ||
+    PLACEHOLDER.test(cleanText(o.textContent));
+
   /** Workday and friends hang stable hooks off data-automation-id. */
   const automationId = (el) =>
     el.getAttribute?.("data-automation-id") ||
@@ -112,7 +125,10 @@
     if (!node || node.contains(el)) return false;
     if (node.querySelector("input, select, textarea")) return false;
     const t = labelText(node);
-    return Boolean(t) && t.length > 1 && t.length < 220;
+    // Real custom questions run long ("Tell us about an AI workflow you've
+    // built… which tools… how did you track drift?"). Too tight a cap skips
+    // the question and settles on the section heading above it.
+    return Boolean(t) && t.length > 1 && t.length < 600;
   }
 
   function labelFor(el) {
@@ -163,6 +179,30 @@
       cleanText(el.id) ||
       "Untitled field"
     );
+  }
+
+  /** Text an upload widget's buttons wear, never the question it answers. */
+  const UPLOAD_CHROME =
+    /^(attach|upload|browse|paste|dropbox|google drive|enter manually|(choose|select|add)( a)? files?|drop files?.*|or drag.*|accepted file types.*)$/i;
+
+  /**
+   * An upload's own label is often just its button ("Attach", on Greenhouse),
+   * which says nothing about whether it wants a resume or a cover letter.
+   * Walk up to the real question instead, falling back to the input's id.
+   */
+  function uploadLabelFor(el) {
+    const own = labelFor(el);
+    if (!UPLOAD_CHROME.test(own)) return own;
+    let node = el.parentElement;
+    for (let depth = 0; depth < 6 && node; depth++, node = node.parentElement) {
+      const candidate = [...node.querySelectorAll(LABEL_SELECTOR)].find(
+        (n) => isLabelCandidate(n, el) && !UPLOAD_CHROME.test(labelText(n)),
+      );
+      if (candidate) return labelText(candidate);
+      if (node.tagName === "FORM") break;
+    }
+    const id = cleanText((el.id || el.getAttribute("name") || "").replace(/[-_]+/g, " "));
+    return id ? id.charAt(0).toUpperCase() + id.slice(1) : own;
   }
 
   /**
@@ -260,8 +300,9 @@
 
     if (tag === "select") {
       return Array.from(el.options)
+        .filter((o) => !isPlaceholderOption(o))
         .map((o) => cleanText(o.textContent))
-        .filter((t) => t && !/^(select|choose|--)/i.test(t))
+        .filter(Boolean)
         .slice(0, 60);
     }
 
@@ -334,18 +375,33 @@
         : "";
     }
     if (tag === "select") {
-      const text = cleanText(el.selectedOptions?.[0]?.textContent);
-      return /^(select|choose|--)/i.test(text || "") ? "" : text || "";
+      const selected = el.selectedOptions?.[0];
+      return isPlaceholderOption(selected) ? "" : cleanText(selected.textContent);
     }
     if (role === "combobox" || role === "listbox") {
+      // react-select (Greenhouse) empties its input once something is chosen
+      // and shows the choice in an element beside it.
+      const shown =
+        el.tagName === "INPUT" && !el.value
+          ? [
+              ...(el
+                .closest("[class*=control]")
+                ?.querySelectorAll(
+                  "[class*=single-value], [class*=singleValue], [class*=multi-value__label]",
+                ) || []),
+            ]
+              .map((n) => cleanText(n.textContent))
+              .filter(Boolean)
+              .join(", ")
+          : "";
       // Workday renders the chosen value as the button's own text.
       const raw = cleanText(
-        el.value || el.getAttribute("aria-valuetext") || el.textContent,
+        shown || el.value || el.getAttribute("aria-valuetext") || el.textContent,
       )
         // Custom controls fold their chevron into textContent.
         .replace(/[▾▴▼▲⌄⌃˅˄]+\s*$/, "")
         .trim();
-      return /^(select one|select|choose|--)/i.test(raw) ? "" : raw;
+      return PLACEHOLDER.test(raw) ? "" : raw;
     }
     if (el.isContentEditable) return cleanText(el.textContent);
     return el.value || "";
@@ -380,7 +436,10 @@
       // skipped as a submit control.
       const isInput = el.tagName.toLowerCase() === "input";
       if (isInput && SKIP_TYPES.has((el.type || "text").toLowerCase())) continue;
-      if (!isVisible(el)) continue;
+      // Upload inputs are usually hidden behind a styled "Attach" button
+      // (Lever, Greenhouse), so for them only disabled counts as unusable.
+      const isUpload = isInput && (el.type || "").toLowerCase() === "file";
+      if (isUpload ? el.disabled : !isVisible(el)) continue;
 
       const identity = `${el.name || ""} ${el.id || ""} ${automationId(el)} ${
         el.getAttribute("autocomplete") || ""
@@ -472,7 +531,11 @@
         type === "radio" ||
         type === "checkbox" ||
         (el.getAttribute("role") || "").toLowerCase() === "radiogroup";
-      const label = grouped ? groupLabelFor(el) : labelFor(el);
+      const label = grouped
+        ? groupLabelFor(el)
+        : type === "file"
+          ? uploadLabelFor(el)
+          : labelFor(el);
       return {
         id: stableId(el, i),
         label: label.replace(/\s*\*\s*$/, "").slice(0, 300),

@@ -88,9 +88,15 @@
     },
   ];
 
-  const YES = /^(yes|y|true|i am|i do)\b/i;
-  const NO = /^(no|n|false|i am not|i do not|i don'?t)\b/i;
-  const DECLINE = /(do not wish|prefer not|decline|choose not)/i;
+  // A bare "y"/"n" only as the whole option, so "N/A" is never a no.
+  const YES = /^(yes|true|i am|i do|i will|i have)\b|^y$/i;
+  // "No preference" is not a no.
+  const NO =
+    /^(no(?! preference)|false|i am not|i'?m not|i do not|i don'?t|i will not|i won'?t|i have not|i haven'?t)\b|^n$/i;
+  // Covers the official wordings: CC-305's "I do not want to answer",
+  // Greenhouse's "I don't wish to answer", "Decline To Self Identify".
+  const DECLINE =
+    /(do not|don'?t) (wish|want)|prefer not|decline|choose not|rather not|not to (say|answer|disclose)/i;
 
   const norm = (s) =>
     String(s || "")
@@ -98,38 +104,61 @@
       .trim()
       .toLowerCase();
 
+  /** "no" starts "No, I will not…" but not "None" or "Not applicable". */
+  const startsAtWord = (text, prefix) =>
+    Boolean(prefix) && text.startsWith(prefix) && !/[a-z0-9]/.test(text.charAt(prefix.length));
+
+  /** Whole-word containment: "male" is in "I am male", not in "Female". */
+  const hasWord = (text, word) => {
+    const at = text.indexOf(word);
+    if (!word || at === -1) return false;
+    for (let i = at; i !== -1; i = text.indexOf(word, i + 1)) {
+      const before = text.charAt(i - 1);
+      const after = text.charAt(i + word.length);
+      if (!/[a-z0-9]/.test(before) && !/[a-z0-9]/.test(after)) return true;
+    }
+    return false;
+  };
+
   /**
    * Maps a stored answer onto whatever wording this particular site uses.
    * "No" has to match "No, I do not require sponsorship"; "I do not wish to
    * answer" has to match "Decline to self-identify".
+   *
+   * These values land in protected fields, so a wrong match is worse than
+   * none: every branch that recognises the shape of the answer returns rather
+   * than falling through. That fallthrough is how "I do not wish to answer"
+   * once became "Yes, I have a disability".
    */
   function matchOption(answer, options) {
     if (!options || options.length === 0) return answer;
     const a = norm(answer);
+    if (!a) return null;
 
     const exact = options.find((o) => norm(o) === a);
     if (exact) return exact;
 
-    const prefix = options.find((o) => norm(o).startsWith(a) || a.startsWith(norm(o)));
+    // Short options ("No", "Yes") are left to the yes/no branches, so that
+    // "No preference" cannot prefix-match "No".
+    const prefix = options.find(
+      (o) => startsAtWord(norm(o), a) || (norm(o).length > 3 && startsAtWord(a, norm(o))),
+    );
     if (prefix) return prefix;
 
-    if (DECLINE.test(answer)) {
-      const decline = options.find((o) => DECLINE.test(o));
-      if (decline) return decline;
-    }
-    if (YES.test(answer)) {
-      const yes = options.find((o) => YES.test(o) && !NO.test(o));
-      if (yes) return yes;
-    }
-    if (NO.test(answer)) {
-      const no = options.find((o) => NO.test(o));
-      if (no) return no;
+    if (DECLINE.test(a)) return options.find((o) => DECLINE.test(o)) || null;
+    // Negative before positive: "I am not a protected veteran" also starts
+    // with "I am".
+    if (NO.test(a)) return options.find((o) => NO.test(o) && !DECLINE.test(o)) || null;
+    if (YES.test(a)) {
+      return options.find((o) => YES.test(o) && !NO.test(o) && !DECLINE.test(o)) || null;
     }
 
-    const contains = options.find(
-      (o) => norm(o).includes(a) || (a.length > 3 && a.includes(norm(o))),
+    return (
+      options.find(
+        (o) =>
+          hasWord(norm(o), a) || (a.length > 3 && norm(o).length > 3 && hasWord(a, norm(o))),
+      ) || null
     );
-    return contains || null;
   }
 
   /**
@@ -138,6 +167,10 @@
    */
   function resolve(field, prefs) {
     if (!field?.topic) return null;
+    // A standing answer is a short decision, never an essay. A free-text
+    // question that merely mentions a topic word ("a race condition you
+    // debugged", "your remote work experience") is not asking for it.
+    if (field.type === "textarea") return null;
     const stored = prefs?.[field.topic];
     if (!stored || stored === ASK) return null;
 
