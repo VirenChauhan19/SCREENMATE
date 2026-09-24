@@ -4,3 +4,7 @@ dist
 .tsbuild
 *.md
 !README.md
+demo
+# Secrets live in the project's environment variables, never in the upload.
+.env*.local
+extension/config.json

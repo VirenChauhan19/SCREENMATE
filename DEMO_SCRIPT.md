@@ -3,20 +3,28 @@
 ## Before you start
 
 **Primary demo: the Chrome extension on a real job posting.**
-**Backup: the Next.js portal in a second tab.** Have both ready.
+**Backup: the web portal in a second tab.** Have both ready.
 
-- [ ] `npm run dev` is running (the extension needs it for agent, research, policy)
+The backend is live at `https://temporary-instant-oboe-q3v79yt.vercel.app` —
+nothing has to run on your laptop. The extension reads that address and its
+access key from `extension/config.json`.
+
 - [ ] Extension loaded: `chrome://extensions` → Developer mode → Load unpacked → `extension/`
-- [ ] Toolbar icon → your profile is filled in → **Backend reachable** shows green
+      (already loaded? click its **reload** icon so it picks up the latest code)
+- [ ] Toolbar icon → your profile is filled in → the status line says **Connected.**
 - [ ] **Standing answers set** — open the panel once and answer the setup card.
       Do this BEFORE the demo; you do not want to fill it on stage.
+      (Change them any time with **Edit standing answers** in the panel.)
 - [ ] A real job application page open in tab 1 — pick one and **test it before you
-      present**. Greenhouse, Lever and Ashby forms scan reliably; Workday does not.
-- [ ] `http://localhost:3000` open in tab 2 as the fallback
+      present**. Lever and Ashby postings need no login and run cleanest; Greenhouse
+      works too. Workday only shows its form after you sign in to that employer's
+      Workday, so avoid it on stage.
+- [ ] Your resume file somewhere easy to find — the run pauses to ask for it.
+- [ ] The web portal open in tab 2 as the fallback:
+      `https://temporary-instant-oboe-q3v79yt.vercel.app`
 - [ ] Window **maximized**
-- [ ] Dry runs, both green:
-      `npm run e2e` → `RESULT: PASS`
-      `npm run fixture:serve` + `npm run ext:e2e` → `RESULT: PASS`
+- [ ] One practice run on the tab-1 page a few minutes before you start. The pill
+      wakes the backend when it appears, but a full run proves the posting is live.
 
 **If the live site misbehaves, switch to tab 2 and keep talking.** The portal demo
 is the same agent; nothing in your script changes except the surface.
@@ -108,6 +116,13 @@ violet highlight.
 > verbatim in my profile, checked server-side before the plan ever reaches the page.
 > It structurally cannot invent a school, a date, or a URL."
 
+**If the form asks about your past** ("Tell us about a time you…", "a project you've
+built"), **point at** the amber `needs you` line in the activity feed.
+
+> "And it won't invent my experience. A question about something I've done can only
+> be answered truthfully by me, so the server hands it back instead of letting the
+> model make up a story — whatever the model tried to write."
+
 ---
 
 ## New beat · It walks the whole wizard
@@ -155,11 +170,20 @@ salary and veteran-status fields still sitting empty on the page.
 
 ## 1:40 – 1:50 · Human decision, agent continues
 
+Every question comes to you: the panel opens, scrolls the card to the top, and
+pulses it once.
+
 **Click `No`.**
 
 > "I answer. It continues where it left off."
 
 **Point at:** the activity line showing the answer was recorded from *your* decision.
+
+**The resume card:** on a real posting the run pauses on **Resume/CV**. Click
+**Choose file…** — it opens the page's own file picker — and pick your resume.
+
+> "It asks for my resume and opens the site's own picker. It never uploads a file
+> by itself."
 
 ---
 
@@ -168,7 +192,8 @@ salary and veteran-status fields still sitting empty on the page.
 **Point at:** the validation checks, then the review panel.
 
 > "Final validation, then it shows me everything it changed, before and after, and
-> asks me to approve it. Accept all, or revert all — the revert puts the page back
+> asks me to approve it. Any line I disagree with, I can Edit, Regenerate, or
+> Revert on its own. Accept all, or revert all — the revert puts the page back
 > exactly as it found it."
 
 > "It never submits. SCREENMATE completed what it could safely automate and left final
@@ -203,10 +228,11 @@ salary and veteran-status fields still sitting empty on the page.
 |---|---|
 | `Agent temporarily unavailable` | Click **Retry** in the panel. The form stays editable — say so out loud, it's the point. |
 | `External research unavailable` | Keep going. The agent proceeds on the job description alone. Call it out as designed degradation. |
-| Run feels slow | Don't wait in silence — narrate the plan panel while actions land. |
+| Run feels slow | Don't wait in silence — narrate the plan panel while actions land. A typical page takes 15–35 seconds. |
 | Anything looks wrong | **Reset** in the top bar, then `Start demo` again. |
 | Extension panel never appears | Click the toolbar icon → **Open on this page**. Auto-detect is deliberately conservative. |
-| `Cannot classify fields` | The backend is down. `npm run dev`, then **Rescan page**. |
+| `Cannot classify fields` / `Cannot reach the backend` | Click the toolbar icon: the status line should say **Connected.** If not, check your internet, then **Rescan page**. |
+| It wrote something wrong | Use **Edit** on that line in the panel, or just type in the field yourself. |
 | Live site parses badly | Switch to the portal tab. Same agent, same script. |
 | Wizard won't advance | Usually a required field the site blocks on. The panel says so. Fill it by hand and hit Run again. |
 | It asks a question you already set | Your standing answer had no match in that site's options. Answer it and tick "Remember" — it learns the new wording. |
@@ -227,7 +253,10 @@ demographics is classified sensitive automatically. New fields fail closed.
 
 **"Could it hallucinate my details?"**
 Not on structured fields. Every non-free-text value must appear verbatim in the
-profile or the tool refuses the write and logs `Blocked ungrounded value`.
+profile, or the server discards the write and the panel names the field. In free
+text it may only state facts from the profile, and a question asking about your
+own past experience is handed back to you by the server — not left to the
+model's judgement.
 
 **"Is this just autofill?"**
 Autofill matches known field names to saved values. It can't write a tailored answer,
@@ -236,8 +265,10 @@ concept of a question it shouldn't answer. Show the sponsorship pause — no aut
 does that.
 
 **"Do my API keys sit in the extension?"**
-No. The extension has no keys and no policy logic. Every call goes through the local
-backend. That's also why it fails closed when the backend is down.
+No. The extension has no model or search keys and no policy logic. Every call goes
+through the SCREENMATE backend, which holds the keys server-side; the extension
+carries only an access key that stops strangers spending the credits. That's also
+why it fails closed when the backend is down.
 
 **"What happens on a form it can't parse?"**
 It tells you it found nothing rather than guessing. There is no per-site code —
