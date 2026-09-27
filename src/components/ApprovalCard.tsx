@@ -1,16 +1,18 @@
 "use client";
 
 import { ShieldCheck } from "lucide-react";
+import { useState } from "react";
 import type { ApplicationField } from "@/lib/types";
 
 interface Props {
   field: ApplicationField;
   reason: string;
   remaining: number;
-  onAnswer: (value: string) => void;
+  onAnswer: (value: string, remember: boolean) => void;
 }
 
 export function ApprovalCard({ field, reason, remaining, onAnswer }: Props) {
+  const [remember, setRemember] = useState(true);
   return (
     <div className="fade-rise rounded-xl border border-warn-400/35 bg-warn-dim/45 p-5">
       <div className="mb-3 flex items-center gap-2">
@@ -35,13 +37,18 @@ export function ApprovalCard({ field, reason, remaining, onAnswer }: Props) {
           <button
             key={opt}
             type="button"
-            onClick={() => onAnswer(opt)}
+            onClick={() => onAnswer(opt, remember)}
             className="min-w-24 rounded-lg border border-ink-600 bg-ink-800 px-5 py-2 text-[13px] font-medium text-mist-100 transition-colors hover:border-accent-500 hover:bg-accent-dim hover:text-accent-300"
           >
             {opt}
           </button>
         ))}
       </div>
+
+      <label className="mt-4 flex items-center gap-2 text-[12px] text-mist-400">
+        <input type="checkbox" checked={remember} onChange={(event) => setRemember(event.target.checked)} />
+        Remember this answer on this browser
+      </label>
 
       <p className="mt-4 border-t border-warn-400/15 pt-3 text-[11px] text-mist-500">
         SCREENMATE does not make sensitive decisions without you.

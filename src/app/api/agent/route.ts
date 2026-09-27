@@ -3,8 +3,10 @@ import { preflight, requireKey, withCors } from "@/lib/auth";
 import { z } from "zod";
 import { OpenRouterError, completeJson } from "@/lib/openrouter";
 import { TOOL_MANIFEST, TOOL_NAMES } from "@/lib/tools";
-import { confidenceFor } from "@/lib/policy";
-import { isGroundedValue } from "@/lib/grounding";
+import { confidenceFor, levelFor } from "@/lib/policy";
+import { factKeysFor, isGroundedValue } from "@/lib/grounding";
+import { ANSWER_RULES, checkAnswer } from "@/lib/answer-quality";
+import { polish } from "@/lib/polish";
 import type { AgentAction, AgentActionPlan, AgentPlan } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -65,6 +67,25 @@ const PLAN_KINDS = [
   "validate",
 ] as const;
 
+type PlanKind = (typeof PLAN_KINDS)[number];
+
+/**
+ * The model sometimes names a step after a tool ("selectOption") instead of
+ * one of the kinds. A plan is display and a research decision, so an odd
+ * kind is mapped to the nearest one rather than failing the whole run.
+ */
+const StepKind = z.string().transform((k): PlanKind => {
+  if ((PLAN_KINDS as readonly string[]).includes(k)) return k as PlanKind;
+  if (/research/i.test(k)) return "research";
+  if (/approv|user|sensitive|decision/i.test(k)) return "approval";
+  if (/valid|check/i.test(k)) return "validate";
+  if (/review/i.test(k)) return "review";
+  if (/verif/i.test(k)) return "verify";
+  if (/observ|read|scan|analy/i.test(k)) return "observe";
+  if (/generat|write|essay|draft|answer/i.test(k)) return "generate";
+  return "fill";
+});
+
 /**
  * Generous caps: a slightly long string is a formatting nit, not a reason to
  * fail an entire run. Display length is enforced by `clamp` below instead.
@@ -75,7 +96,7 @@ const PlanSchema = z.object({
   steps: z
     .array(
       z.object({
-        kind: z.enum(PLAN_KINDS),
+        kind: StepKind,
         label: z.string().min(1).max(160),
       }),
     )
@@ -85,22 +106,9 @@ const PlanSchema = z.object({
   researchRationale: z.string().min(1).max(800),
 });
 
-/**
- * Deterministic cleanup of generated prose.
- *
- * The prompt asks for no em-dashes and the model still reaches for them, so we
- * remove the tells we can fix mechanically rather than hoping.
- */
-function polish(text: string): string {
-  return text
-    // "background—thinking about X—actually" → parenthetical commas
-    .replace(/\s*[—–]\s*/g, ", ")
-    .replace(/,\s*,/g, ",")
-    .replace(/\s+([,.;:!?])/g, "$1")
-    .replace(/([,.;:!?])(?=[^\s\d])/g, "$1 ")
-    .replace(/[ 	]{2,}/g, " ")
-    .trim();
-}
+/** A free-text box that asks for a link, not for prose. */
+const ASKS_FOR_LINK =
+  /\b(url|link|links|website|web site|portfolio|github|linkedin|profile|handle|twitter)\b/i;
 
 /** Trims on a word boundary so panel copy never runs away. */
 function clamp(text: string, limit: number): string {
@@ -119,14 +127,22 @@ const ArgValue = z
   .union([z.string(), z.number(), z.boolean(), z.null(), z.array(z.union([z.string(), z.number()]))])
   .transform((v) => (Array.isArray(v) ? v.join(", ") : v === null ? "" : String(v)));
 
+const AnswerEvidenceSchema = z.array(z.object({
+  source: z.string().max(100),
+  quote: z.string().min(1).max(1200),
+})).max(12).default([]);
+
 const ActionPlanSchema = z.object({
   decisionSummary: z.string().min(1).max(800),
   actions: z
     .array(
       z.object({
-        tool: z.enum(TOOL_NAMES as [string, ...string[]]),
+        // Checked per action below: one invented tool name drops that action,
+        // not the whole pass.
+        tool: z.string(),
         args: z.record(ArgValue).default({}),
         rationale: z.string().max(400).optional(),
+        evidence: AnswerEvidenceSchema,
       }),
     )
     // One action per open field on a long real form easily passes 14, and a
@@ -148,6 +164,7 @@ const ASKS_FOR_EXPERIENCE =
 const RegenerateSchema = z.object({
   value: z.string().min(20).max(1200),
   note: z.string().max(160).optional(),
+  evidence: AnswerEvidenceSchema,
 });
 
 /* ---------------- Prompt fragments ---------------- */
@@ -159,16 +176,16 @@ const IDENTITY =
 
 const HUMAN_VOICE = [
   "WRITING FREE-TEXT ANSWERS — this is someone typing in a box, not a cover letter:",
-  "- RHYTHM, non-negotiable: write 3 or 4 sentences, and make exactly one of them fewer than eight words. Two long sentences in a row is the single clearest tell that a machine wrote it.",
+  "- Answer directly in the length and format requested. Use short factual answers for factual questions and a concise paragraph for motivation unless the question requests another format.",
   "- Use contractions. Write \"I've\", not \"I have\".",
   "- Be concrete, but only with what the profile states: name the actual school, degree, skill, or portfolio from it. A specific detail beats any adjective. Never invent a project, employer, result, or number to sound specific.",
   "- Say one plain thing about why this work is interesting, in the applicant's own register. No throat-clearing.",
   "- BANNED, no exceptions: passionate, excited to, thrilled, delve, leverage, resonates, align(s) with, synergy, robust, seamless(ly), cutting-edge, fast-paced, landscape, testament, tapestry, deeply, moreover, furthermore, in today's, I am confident that, perfect fit, dream role, honed.",
   "- Do not open with \"As a\" or by restating the job title back at them.",
-  "- Do not list three things in a row. Two is fine.",
+  "- Include only relevant details. Use lists when the question requests them.",
   "- No em-dashes. No rhetorical questions. No closing summary sentence that restates the paragraph.",
-  "- No greeting, no sign-off, no placeholders, no bullet points.",
-  "- If the question asks for something longer, keep every sentence load-bearing and keep the short one.",
+  "- No greeting, sign-off, or placeholders unless the requested format calls for them.",
+  "- Prioritize accuracy and relevance over stylistic variation. Do not add anecdotes to make an answer sound personal.",
 ].join("\n");
 
 const HARD_RULES = [
@@ -233,6 +250,13 @@ export async function POST(request: Request) {
   }
 
   const { phase, applicationState, profile, research, recentActions } = parsed.data;
+  for (const field of applicationState.fields) {
+    const policy = levelFor(field.id, field.label, field.type);
+    if (policy === "sensitive" || field.sensitive || field.level === "sensitive") {
+      field.level = "sensitive";
+      field.sensitive = true;
+    } else if (policy === "review") field.level = "review";
+  }
   const empty = applicationState.fields.filter((f) => !f.value);
 
   const contextBlock = [
@@ -318,7 +342,7 @@ export async function POST(request: Request) {
       const target = applicationState.fields.find(
         (f) => f.id === parsed.data.targetFieldId,
       );
-      if (!target || target.sensitive) {
+      if (!target || target.sensitive || target.type !== "textarea" || factKeysFor(target.label, target.type)) {
         return withCors(NextResponse.json(
           { error: "That field cannot be regenerated." },
           { status: 400 },
@@ -336,8 +360,10 @@ export async function POST(request: Request) {
               "Produce a genuinely different angle from the previous attempt. Do not paraphrase it.",
               "",
               HUMAN_VOICE,
+              ANSWER_RULES,
               "",
-              'OUTPUT JSON only: {"value": string, "note": string}',
+              "Cite each claim with exact evidence quotations. Use source names profile.<key>, jobDescription, research.companySummary, research.technicalFocus, or research.relevantContext. Personal claims must cite profile facts, and past-work claims require actual profile experience/project details.",
+              'OUTPUT JSON only: {"value": string, "note": string, "evidence": [{"source": string, "quote": string}]}',
               "note: at most 12 words on what changed in this version.",
             ].join("\n"),
           },
@@ -353,11 +379,20 @@ export async function POST(request: Request) {
           },
         ],
         RegenerateSchema,
-        { maxTokens: 700, temperature: 0.8 },
+        { maxTokens: 1100, temperature: 0.2 },
       );
+      const value = polish(regenerated.value);
+      const quality = checkAnswer(
+        { fieldId: target.id, question: target.label, type: target.type, value },
+        { profile, jobDescription: applicationState.jobDescription, research },
+        regenerated.evidence,
+      );
+      if (!quality.ok) {
+        return withCors(NextResponse.json({ error: "Answer not verified", reason: quality.reason }, { status: 422 }), request);
+      }
       return withCors(NextResponse.json({
         ...regenerated,
-        value: polish(regenerated.value),
+        value,
       }), request);
     }
 
@@ -379,15 +414,18 @@ export async function POST(request: Request) {
             ),
             "",
             HARD_RULES,
-            "6. For any free-text question, write an original answer in the applicant's voice connecting their real profile to this specific role. Use the research context if it is present. Every fact about the applicant (projects, employers, results, numbers, durations, tools used) must come from the profile; the answer is submitted under their name. Always answer questions about motivation or interest (why this company, why this role, what they would work on) from the profile and research. Only a question asking the applicant to describe a specific past project, experience, or accomplishment that the profile does not contain goes unanswered: call flagIssue on that field with a message saying the applicant needs to write it from their own experience.",
+            "6. For any free-text question, write an original answer in the applicant's voice connecting their real profile to this specific role. Use the research context if it is present. Every fact about the applicant (projects, employers, results, numbers, durations, tools used) must come from the profile; the answer is submitted under their name. Always answer questions about motivation or interest (why this company, why this role, what they would work on) from the profile and research, whether the question is required or optional. Only a question asking the applicant to describe a specific past project, experience, or accomplishment that the profile does not contain goes unanswered: call flagIssue on that field with a message saying the applicant needs to write it from their own experience. A question that says the applicant must write it themselves also gets flagIssue.",
+            "6b. A field that asks for a link or profile (LinkedIn, GitHub, website, portfolio) gets the exact URL from the profile and nothing else, even when the box is a textarea.",
             "",
             HUMAN_VOICE,
+            ANSWER_RULES,
             "",
             "7. Give every action a one-clause rationale naming where the value came from.",
             "8. Set requiresUserApproval to true if any action is requestUserApproval.",
+            "9. Include exact supporting quotations for every generated answer, using evidence entries with source names profile.<key>, jobDescription, research.companySummary, research.technicalFocus, or research.relevantContext. Cite the actual relevant applicant facts. Job requirements do not prove the applicant has experience. Past-work claims require profile experience or project details.",
             "",
             "OUTPUT JSON only:",
-            '{"decisionSummary": string, "actions": [{"tool": string, "args": object, "rationale": string}], "requiresUserApproval": boolean}',
+            '{"decisionSummary": string, "actions": [{"tool": string, "args": object, "rationale": string, "evidence": [{"source": string, "quote": string}]}], "requiresUserApproval": boolean}',
             "decisionSummary: one sentence on what you are about to do and why it is safe. No step-by-step reasoning.",
           ].join("\n"),
         },
@@ -397,7 +435,7 @@ export async function POST(request: Request) {
         },
       ],
       ActionPlanSchema,
-      { maxTokens: 1800, temperature: 0.4 },
+      { maxTokens: 3600, temperature: 0.1 },
     );
 
     // Server-side safety net: strip any write aimed at a sensitive field and
@@ -420,6 +458,7 @@ export async function POST(request: Request) {
     const dropped: string[] = [];
 
     for (const action of actionPlan.actions) {
+      if (!(TOOL_NAMES as string[]).includes(action.tool)) continue;
       const fieldId = action.args?.fieldId;
       const isWrite = action.tool === "fillField" || action.tool === "selectOption";
 
@@ -445,13 +484,20 @@ export async function POST(request: Request) {
         continue;
       }
 
+      const field = fieldId
+        ? applicationState.fields.find((f) => f.id === fieldId)
+        : undefined;
+      // Never replace a value already entered by the applicant or the site.
+      if (isWrite && (!field || field.value?.trim())) continue;
+
       // Experience net: an answer to "tell us about a time you…" would be
       // invented, so it is handed back to the applicant instead.
       if (
         isWrite &&
         fieldId &&
         typeById.get(fieldId) === "textarea" &&
-        ASKS_FOR_EXPERIENCE.test(labelById.get(fieldId) ?? "")
+        ASKS_FOR_EXPERIENCE.test(labelById.get(fieldId) ?? "") &&
+        !String(profile.experience || profile.projects || "").trim()
       ) {
         const key = `flagIssue:${fieldId}`;
         if (seen.has(key)) continue;
@@ -474,7 +520,7 @@ export async function POST(request: Request) {
       if (isWrite && fieldId) {
         const fieldType = typeById.get(fieldId) ?? "text";
         const value = action.args?.value ?? "";
-        if (!isGroundedValue(fieldType, value, profile)) {
+        if (!isGroundedValue(fieldType, value, profile, labelById.get(fieldId) ?? "")) {
           dropped.push(
             `${fieldId}: value not present in profile — write discarded`,
           );
@@ -487,13 +533,40 @@ export async function POST(request: Request) {
       seen.add(key);
 
       const level = fieldId ? levelById.get(fieldId) : undefined;
+      // Prose only: a box that asks for a link, or holds one bare token,
+      // is written exactly as the profile has it.
       if (
         isWrite &&
         fieldId &&
         typeById.get(fieldId) === "textarea" &&
-        action.args?.value
+        action.args?.value &&
+        !ASKS_FOR_LINK.test(labelById.get(fieldId) ?? "") &&
+        /\s/.test(action.args.value.trim())
       ) {
         action.args.value = polish(action.args.value);
+      }
+      if (isWrite && field) {
+        const quality = checkAnswer(
+          {
+            fieldId: field.id,
+            question: field.label,
+            type: field.type,
+            options: field.options,
+            value: action.args.value,
+          },
+          { profile, jobDescription: applicationState.jobDescription, research },
+          action.evidence,
+        );
+        if (!quality.ok) {
+          actions.push({
+            tool: "flagIssue",
+            args: { fieldId: field.id, message: quality.reason },
+            rationale: "The proposed answer did not pass the local evidence check.",
+          });
+          seen.add(`flagIssue:${field.id}`);
+          continue;
+        }
+        action.rationale = quality.reason;
       }
       actions.push({
         tool: action.tool as AgentAction["tool"],

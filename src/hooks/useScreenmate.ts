@@ -9,6 +9,7 @@ import {
   roleById,
 } from "@/lib/application";
 import { userProfile } from "@/lib/profile";
+import { answerStorage, recalledAnswer, rememberAnswer } from "@/lib/answer-memory";
 import {
   acceptField,
   executeAction,
@@ -45,9 +46,7 @@ export interface ContextAlert {
 }
 
 const MAX_PASSES = 3;
-// Just enough for a controlled field to settle; any longer is only waiting.
-const STEP_DELAY = 120;
-const VERIFY_DELAY = 80;
+// Yield to the UI without adding a fixed pause between state updates.
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -232,6 +231,7 @@ export function useScreenmate() {
     markStep("research", "active");
     try {
       const res = await fetch("/api/research", {
+        signal: AbortSignal.timeout(70000),
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -279,7 +279,7 @@ export function useScreenmate() {
     async (action: AgentAction, gen: number): Promise<void> => {
       if (stale(gen)) return;
       const attempt = () => executeAction(stateRef.current, action);
-      let result = attempt();
+      const result = attempt();
 
       if (result.approvalRequest) {
         const { fieldId } = result.approvalRequest;
@@ -327,9 +327,7 @@ export function useScreenmate() {
       }
 
       /* --- verify --- */
-      setStatus("verifying");
-      await sleep(VERIFY_DELAY);
-      if (stale(gen)) return;
+      setStatus("verifying");      if (stale(gen)) return;
       let check = verifyAction(
         stateRef.current,
         result.change.fieldId,
@@ -341,9 +339,7 @@ export function useScreenmate() {
         log("warn", "Verification failed — retrying once", check.summary, true);
         const retry = attempt();
         if (retry.ok) {
-          commit(retry.state);
-          await sleep(VERIFY_DELAY);
-          check = verifyAction(
+          commit(retry.state);          check = verifyAction(
             stateRef.current,
             result.change.fieldId,
             result.change.after,
@@ -375,6 +371,7 @@ export function useScreenmate() {
     let plan: AgentActionPlan;
     try {
       const res = await fetch("/api/agent", {
+        signal: AbortSignal.timeout(70000),
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(agentPayload("act")),
@@ -396,7 +393,7 @@ export function useScreenmate() {
     markStep("fill", "active");
 
     for (const action of plan.actions) {
-      await sleep(STEP_DELAY);
+      await sleep(0);
       if (stale(gen)) return "stale";
       if (action.tool === "researchCompany") {
         await runResearch();
@@ -425,7 +422,7 @@ export function useScreenmate() {
   const finalize = useCallback(async (gen: number) => {
     setStatus("verifying");
     markStep("validate", "active");
-    await sleep(STEP_DELAY);
+    await sleep(0);
     if (stale(gen)) return;
 
     const result = executeAction(stateRef.current, {
@@ -481,6 +478,13 @@ export function useScreenmate() {
     try {
       /* --- observe --- */
       setStatus("observing");
+      for (const field of stateRef.current.fields) {
+        if (hasValue(field)) continue;
+        const answer = recalledAnswer(answerStorage(), userProfile.email, field);
+        if (!answer) continue;
+        commit(setFieldByUser(stateRef.current, field.id, answer));
+        log("success", `${field.label} filled from your saved answer`, answer);
+      }
       const missing = stateRef.current.fields.filter((f) => !hasValue(f));
       log(
         "observe",
@@ -492,7 +496,7 @@ export function useScreenmate() {
               .slice(0, 4)
               .join(", ")}${missing.length > 4 ? "…" : ""}`,
       );
-      await sleep(STEP_DELAY);
+      await sleep(0);
       if (stale(gen)) return;
 
       /* --- plan --- */
@@ -500,6 +504,7 @@ export function useScreenmate() {
       let plan: AgentPlan;
       try {
         const res = await fetch("/api/agent", {
+        signal: AbortSignal.timeout(70000),
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(agentPayload("plan")),
@@ -520,7 +525,7 @@ export function useScreenmate() {
       setSteps(plan.steps.map((s) => ({ ...s, status: "pending" as const })));
       log("observe", "Observation", plan.observation);
       markStep("observe", "done");
-      await sleep(STEP_DELAY);
+      await sleep(0);
 
       /* --- research decision: a real branch, not a formality --- */
       if (plan.researchNeeded) {
@@ -536,7 +541,7 @@ export function useScreenmate() {
         log("think", "Context check", plan.researchRationale);
         markStep("research", "skipped");
       }
-      await sleep(STEP_DELAY);
+      await sleep(0);
       if (stale(gen)) return;
 
       /* --- act --- */
@@ -556,14 +561,18 @@ export function useScreenmate() {
       // An orphaned loop must not clear the flag held by the run that replaced it.
       if (!stale(gen)) runningRef.current = false;
     }
-  }, [agentPayload, failAgent, finalize, log, markStep, runPass, runResearch, stale]);
+  }, [agentPayload, commit, failAgent, finalize, log, markStep, runPass, runResearch, stale]);
 
   /* ---------------- Public: approvals ---------------- */
 
   const resolveApproval = useCallback(
-    (fieldId: string, value: string) => {
+    (fieldId: string, value: string, remember = true) => {
       const field = stateRef.current.fields.find((f) => f.id === fieldId);
+      if (!field || !field.options?.includes(value)) return;
       commit(setFieldByUser(stateRef.current, fieldId, value));
+      if (!rememberAnswer(answerStorage(), userProfile.email, field, value, remember)) {
+        log("warn", "Answer filled, but could not save your preference", "Browser storage is unavailable.");
+      }
       setLastWrite({ fieldId, at: Date.now() });
       historyRef.current.push(`user answered ${fieldId} = ${value}`);
       bumpStats({ userDecisions: 1 });
@@ -585,7 +594,7 @@ export function useScreenmate() {
       setStatus("acting");
       void (async () => {
         try {
-          await sleep(STEP_DELAY);
+          await sleep(0);
           if (stale(gen)) return;
           const stillOpen = stateRef.current.fields.filter(
             (f) => f.required && !hasValue(f) && !f.sensitive,
@@ -625,7 +634,7 @@ export function useScreenmate() {
     setReport(buildReport(next.fields));
     markStep("review", "done");
     setStatus("complete");
-  }, [commit, log, markStep, stale]);
+  }, [commit, log, markStep]);
 
   const rejectChange = useCallback(
     (fieldId: string) => {
@@ -665,6 +674,7 @@ export function useScreenmate() {
       try {
         log("think", "Regenerating response", "Producing a different angle.");
         const res = await fetch("/api/agent", {
+        signal: AbortSignal.timeout(70000),
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(
@@ -694,9 +704,22 @@ export function useScreenmate() {
   );
 
   const completeReview = useCallback(() => {
-    setReport(buildReport(stateRef.current.fields));
+    const pending = changesRef.current.some(c => !stateRef.current.fields.find(f => f.id === c.fieldId)?.reviewed);
+    const report = buildReport(stateRef.current.fields);
+    setReport(report);
+    if (pending) {
+      setBanner("Review each change or accept all changes before finishing.");
+      setStatus("reviewing");
+      return;
+    }
+    setBanner(null);
     markStep("review", "done");
     setStatus("complete");
+  }, [markStep]);
+
+  const reopenReview = useCallback(() => {
+    setStatus("reviewing");
+    markStep("review", "active");
   }, [markStep]);
 
   /* ---------------- Public: environment changes ---------------- */
@@ -708,6 +731,13 @@ export function useScreenmate() {
       const previous = before?.value ?? "";
 
       commit(setFieldByUser(stateRef.current, fieldId, value));
+      // Editing or clearing a remembered decision also updates its memory.
+      // Clearing the select is the way to make this question ask again.
+      if (before && recalledAnswer(answerStorage(), userProfile.email, before)) {
+        if (!rememberAnswer(answerStorage(), userProfile.email, before, value, Boolean(value))) {
+          log("warn", "Could not update the saved answer", "The form changed, but browser storage is unavailable.");
+        }
+      }
 
       // The environment changed under the agent — say so rather than silently
       // re-filling. This is what makes SCREENMATE reactive rather than scripted.
@@ -874,6 +904,7 @@ export function useScreenmate() {
     editChange,
     regenerate,
     completeReview,
+    reopenReview,
     restoreField,
     dismissContextAlert,
     changeRole,

@@ -56,6 +56,8 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   try {
     const extId = await browser.installExtension(EXT);
     const popupUrl = `chrome-extension://${extId}/popup/popup.html`;
+    // Profile and CV import live on the settings page; the popup shows status.
+    const settingsUrl = `chrome-extension://${extId}/options/options.html`;
     await sleep(2500);
 
     /* ---- 1. a fresh install picks up the bundled backend ---- */
@@ -118,6 +120,10 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     /* ---- 3. a CV import survives without a second click ---- */
     console.log("");
     console.log("=== CV import persists ===");
+    await popup.close();
+    popup = await browser.newPage();
+    await popup.goto(settingsUrl, { waitUntil: "domcontentloaded" });
+    await sleep(2000);
     await popup.evaluate(() => {
       [
         "name",
@@ -147,7 +153,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
       status = await popup.evaluate(() =>
         document.getElementById("cvStatus").textContent.trim(),
       );
-      if (!/^Reading/.test(status)) break;
+      if (!/Reading/.test(status)) break;
     }
     console.log(`  parsed: "${status}"`);
 
@@ -162,7 +168,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
     await popup.close();
     popup = await browser.newPage();
-    await popup.goto(popupUrl, {
+    await popup.goto(settingsUrl, {
       waitUntil: "domcontentloaded",
     });
     await sleep(2000);

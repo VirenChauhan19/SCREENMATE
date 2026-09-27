@@ -74,6 +74,8 @@ const SENSITIVE_TOPICS = [
   "right to work",
   "visa",
   "citizenship",
+  "permanent resident",
+  "green card",
   "immigration",
   "disability",
   "veteran",
@@ -83,7 +85,6 @@ const SENSITIVE_TOPICS = [
   "lgbt",
   "sexual orientation",
   "transgender",
-  "pronoun",
   "salary",
   "compensation",
   "pay expectation",
@@ -107,9 +108,20 @@ const RACE = /(^|[^a-z])rac(e|es|ial)(?![a-z])(?!\s*conditions?\b)/i;
  */
 const SEX = /(^|[^a-z])sex(?![a-z])/i;
 
+/** "Pronouns", but not "Name pronunciation". */
+const PRONOUN = /(^|[^a-z])pronouns?(?![a-z])/i;
+
+/** "Are you a Singapore citizen?" is a legal status, like citizenship. */
+const CITIZEN = /(^|[^a-z])citizens?(?![a-z])/i;
+
 export function isSensitiveTopic(fieldId: string, label: string): boolean {
   const haystack = `${fieldId} ${label}`.toLowerCase();
-  return SENSITIVE_TOPICS.some((topic) => haystack.includes(topic)) || RACE.test(haystack);
+  return (
+    SENSITIVE_TOPICS.some((topic) => haystack.includes(topic)) ||
+    RACE.test(haystack) ||
+    PRONOUN.test(haystack) ||
+    CITIZEN.test(haystack)
+  );
 }
 
 /**

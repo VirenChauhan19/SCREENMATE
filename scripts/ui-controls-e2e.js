@@ -1,5 +1,6 @@
 /**
- * Exercises every control in the popup and the panel the way a person does.
+ * Exercises every control in the popup, the settings page and the panel the
+ * way a person does.
  *
  * The CV bug hid because the API was tested with curl while the button that
  * calls it never was. This covers the buttons.
@@ -56,6 +57,7 @@ function envKey() {
     const extId = await browser.installExtension(EXT);
     await configureExtension(browser, extId, { backendUrl: BACKEND });
     const popupUrl = `chrome-extension://${extId}/popup/popup.html`;
+    const settingsUrl = `chrome-extension://${extId}/options/options.html`;
 
     /* ---------------- popup ---------------- */
     console.log("=== POPUP ===");
@@ -67,9 +69,20 @@ function envKey() {
     const health = await popup.evaluate(() => ({
       text: document.getElementById("health").textContent.trim(),
       cls: document.getElementById("health").className,
+      summary: document.getElementById("summary").textContent.replace(/\s+/g, " ").trim(),
     }));
     console.log(`  health: "${health.text}"`);
+    console.log(`  summary: "${health.summary}"`);
     check("health reports connected", health.cls.includes("ok"), health.text);
+    check("popup summarises the profile", /Viren Chauhan/.test(health.summary), health.summary);
+    await popup.close();
+
+    /* ---------------- settings page ---------------- */
+    console.log("=== SETTINGS ===");
+    popup = await browser.newPage();
+    popup.on("pageerror", (e) => console.log("  [settings error]", e.message));
+    await popup.goto(settingsUrl, { waitUntil: "domcontentloaded" });
+    await sleep(2500);
 
     await popup.evaluate(() => {
       document.getElementById("name").value = "Test Person";
@@ -84,7 +97,7 @@ function envKey() {
 
     await popup.close();
     popup = await browser.newPage();
-    await popup.goto(popupUrl, { waitUntil: "domcontentloaded" });
+    await popup.goto(settingsUrl, { waitUntil: "domcontentloaded" });
     await sleep(1500);
     const persisted = await popup.evaluate(() => ({
       name: document.getElementById("name").value,
@@ -148,7 +161,7 @@ function envKey() {
     await inPanel(() => {
       const sr = document.getElementById("screenmate-root").shadowRoot;
       [...sr.querySelectorAll("button")]
-        .find((b) => /run screenmate/i.test(b.textContent))
+        .find((b) => /edit standing answers/i.test(b.textContent))
         ?.click();
     });
     await sleep(1600);

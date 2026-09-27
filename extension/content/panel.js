@@ -12,7 +12,7 @@
 
 .root {
   position: fixed; top: 16px; right: 16px; z-index: 2147483647;
-  width: 372px; max-height: calc(100vh - 32px);
+  width: min(372px, calc(100vw - 32px)); max-height: calc(100vh - 32px);
   display: flex; flex-direction: column;
   background: #0e0e11; color: #d2d2da;
   border: 1px solid #23232b; border-radius: 12px;
@@ -22,6 +22,8 @@
 }
 .root.collapsed { width: auto; }
 .root.collapsed .body { display: none; }
+.root.submitted .cacts, .root.submitted .editor { display: none; }
+.diff.prior .cacts, .diff.prior .editor { display: none; }
 
 .head {
   display: flex; align-items: center; justify-content: space-between; gap: 12px;
@@ -101,6 +103,7 @@
 .t-mute { color: #8a8a98 } .t-bad { color: #d4736b }
 
 .card { border: 1px solid rgba(216,163,80,.35); background: rgba(46,36,21,.45); border-radius: 10px; padding: 14px; }
+.sec.warn[data-question="review-queue"] .card + .card { margin-top: 10px; }
 .card .q { font-size: 13.5px; font-weight: 500; color: #eeeef2; line-height: 1.35; }
 .card .why { font-size: 12px; color: #8a8a98; margin-top: 7px; line-height: 1.5; }
 .opts { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 12px; }
@@ -185,6 +188,24 @@
   padding:7px 9px; color:#eeeef2; font:inherit; font-size:12px; outline:none; resize:vertical;
 }
 .efield:focus { border-color:#7c6cf5; }
+.afree.multi { width:100%; min-height:84px; resize:vertical; line-height:1.45; margin-top:12px; }
+.asel { flex:1; min-width:160px; background:#17171c; border:1px solid #2e2e38; border-radius:7px;
+        padding:7px 8px; color:#eeeef2; font:inherit; font-size:12.5px; outline:none; }
+.asel:focus { border-color:#7c6cf5; }
+.btn.go { background:#58b58a; color:#0e0e11; }
+.btn.go:hover { background:#6cc69b; }
+.opt.on { border-color:#7c6cf5; background:rgba(42,37,69,.9); color:#ada3f9; font-weight:500; }
+.opt.go { border-color:#7c6cf5; background:#7c6cf5; color:#fff; }
+.opt.go:hover { background:#8f82f7; color:#fff; }
+.card.busy .opt, .card.busy .skip, .card.busy .asel, .card.busy .afree, .card.busy .alink {
+  pointer-events:none; opacity:.45;
+}
+.abusy { font-size:11.5px; color:#ada3f9; margin-top:10px; }
+.aerr { font-size:11.5px; color:#d4736b; margin-top:10px; line-height:1.5; }
+.alink { background:none; border:none; color:#ada3f9; font-size:11.5px; cursor:pointer;
+         font-family:inherit; text-decoration:underline; padding:0; margin-top:6px; }
+.alink:hover { color:#eeeef2; }
+.discs { display:flex; gap:14px; flex-wrap:wrap; }
 @keyframes sm-attn { 0% { box-shadow: 0 0 0 0 rgba(216,163,80,.6); } 100% { box-shadow: 0 0 0 12px rgba(216,163,80,0); } }
 .attn { animation: sm-attn 1.1s ease-out 2; }
 `;
@@ -233,7 +254,7 @@
       this.shadow.append(this.root);
 
       this.root.classList.toggle("collapsed", this.collapsed);
-      document.documentElement.append(this.host);
+      (document.body || document.documentElement).append(this.host);
       this.injectPageStyles();
       this.render({});
     }
@@ -274,6 +295,9 @@
       this.root.querySelectorAll(".pfree").forEach((i) => {
         drafts[i.dataset.topic] = i.value;
       });
+      const answerDrafts = Object.fromEntries([...this.root.querySelectorAll(".afree")].map((i) => [i.dataset.field || "", i.value]));
+      const selectDrafts = Object.fromEntries([...this.root.querySelectorAll(".asel")].map((i) => [i.dataset.field || "", i.value]));
+      const rememberDrafts = Object.fromEntries([...this.root.querySelectorAll(".remember")].map((i) => [i.dataset.field || "", i.checked]));
       const editors = {};
       this.root.querySelectorAll(".editor").forEach((e) => {
         if (!e.hidden) editors[e.dataset.editor] = e.querySelector(".efield")?.value;
@@ -286,12 +310,18 @@
         focusKey: active?.classList?.contains("pfree")
           ? `pfree:${active.dataset.topic}`
           : active?.classList?.contains("afree")
-            ? "afree"
-            : null,
+            ? `afree:${active.dataset.field || ""}`
+            : active?.classList?.contains("efield")
+              ? `editor:${active.closest('.editor').dataset.editor}`
+              : active?.classList?.contains("asel") ? `asel:${active.dataset.field || ""}` : null,
         caret: typeof active?.selectionStart === "number" ? active.selectionStart : null,
+        selectionEnd: typeof active?.selectionEnd === "number" ? active.selectionEnd : null,
+        remember: this.root.querySelector(".remember")?.checked,
         drafts,
         editors,
-        answerDraft: this.root.querySelector(".afree")?.value || "",
+        answerDrafts,
+        selectDrafts,
+        rememberDrafts,
       };
     }
 
@@ -299,10 +329,31 @@
       // Unsaved typing survives the re-render.
       this.root.querySelectorAll(".pfree").forEach((i) => {
         const draft = ui.drafts[i.dataset.topic];
-        if (draft) i.value = draft;
+        if (draft !== undefined) i.value = draft;
       });
-      const answer = this.root.querySelector(".afree");
-      if (answer && ui.answerDraft) answer.value = ui.answerDraft;
+      this.root.querySelectorAll(".afree").forEach((answer) => {
+        const draft = ui.answerDrafts?.[answer.dataset.field || ""];
+        if (draft !== undefined) answer.value = draft;
+      });
+      this.root.querySelectorAll(".asel").forEach((choice) => {
+        const draft = ui.selectDrafts?.[choice.dataset.field || ""];
+        if (draft !== undefined) choice.value = draft;
+      });
+      this.root.querySelectorAll(".remember").forEach((remember) => {
+        const checked = ui.rememberDrafts?.[remember.dataset.field || ""];
+        if (checked !== undefined) remember.checked = checked;
+      });
+      // Read older saved panel state only while the same question is still open.
+      const approval = this.state?.approval;
+      const approvalKey = approval ? `${this.state.step || 1}:${approval.fieldId}` : null;
+      if (approvalKey && ui.approvalKey === approvalKey) {
+        const answer = this.root.querySelector(".afree");
+        const choice = this.root.querySelector(".asel");
+        const remember = this.root.querySelector(".remember");
+        if (answer && ui.answerDraft !== undefined) answer.value = ui.answerDraft;
+        if (choice && ui.selectDraft !== undefined) choice.value = ui.selectDraft;
+        if (remember && ui.remember !== undefined) remember.checked = ui.remember;
+      }
 
       // An editor the user had open, and whatever they had typed in it, stays.
       for (const [fieldId, value] of Object.entries(ui.editors || {})) {
@@ -320,10 +371,9 @@
           autoscroll && ui.nearBottom ? body.scrollHeight : ui.scrollTop;
       }
 
-      if (ui.focusKey) {
+      if (ui.focusKey && !ui.focusKey.startsWith("afree:") && !ui.focusKey.startsWith("asel:")) {
         const el =
-          ui.focusKey === "afree"
-            ? this.root.querySelector(".afree")
+          ui.focusKey.startsWith("editor:") ? this.editorFor(ui.focusKey.slice(7))?.querySelector(".efield")
             : this.root.querySelector(
                 `.pfree[data-topic="${ui.focusKey.slice(6)}"]`,
               );
@@ -331,18 +381,26 @@
           el.focus({ preventScroll: true });
           if (ui.caret !== null) {
             try {
-              el.setSelectionRange(ui.caret, ui.caret);
+              el.setSelectionRange(ui.caret, ui.selectionEnd ?? ui.caret);
             } catch {
               /* not all inputs support selection */
             }
           }
         }
       }
+      if (ui.focusKey?.startsWith("afree:")) {
+        const el = [...this.root.querySelectorAll(".afree")].find(i => (i.dataset.field || "") === ui.focusKey.slice(6));
+        el?.focus({ preventScroll: true });
+        if (el && ui.caret !== null) el.setSelectionRange(ui.caret, ui.selectionEnd ?? ui.caret);
+      } else if (ui.focusKey?.startsWith("asel:")) {
+        [...this.root.querySelectorAll(".asel")].find(i => (i.dataset.field || "") === ui.focusKey.slice(5))?.focus({ preventScroll: true });
+      }
     }
 
     render(s) {
       const ui = this.captureUi();
       this.state = s;
+      this.approvalKey = s.approval ? `${s.step || 1}:${s.approval.fieldId}` : null;
       const {
         context = {},
         status = "idle",
@@ -351,6 +409,8 @@
         activity = [],
         research,
         approval,
+        approvals = approval ? [approval] : [],
+        preflightReview = false,
         changes = [],
         report,
         stats,
@@ -359,7 +419,9 @@
         step = 1,
         pages = [],
         submitHandoff,
+        submitted,
         needsPrefs,
+        needsProfile,
         prefs = {},
         prefQuestions = [],
       } = s;
@@ -376,6 +438,7 @@
                   "acting",
                   "verifying",
                   "advancing",
+                  "submitting",
                 ].includes(status)
               ? "run"
               : "";
@@ -390,9 +453,34 @@
         advancing: "Advancing to next step",
         waiting: "Waiting for user",
         reviewing: "Awaiting your review",
-        complete: "Complete",
-        error: "Backend unavailable",
+        complete: report?.blockers?.length ? "Needs your attention" : "Complete",
+        submitting: "Submitting…",
+        submitted: "Submitted",
+        error: "Stopped",
       };
+
+      // What kind of question is asking, and what it promises.
+      const kind = approval?.kind || "decision";
+      const QUESTION_LABEL = {
+        decision: "User decision required",
+        missing: "Needs your answer",
+        flagged: "Needs your answer",
+        file: "Attach a file",
+      };
+      const QUESTION_FINE = {
+        decision: "SCREENMATE does not make sensitive decisions without you.",
+        missing: "Your words go straight into the form. Nothing is made up.",
+        flagged: "Your words go straight into the form. Nothing is made up.",
+        file: "The file goes into this site's upload, as if you had used its own button. Nothing else sees it.",
+      };
+      const blockers = report?.blockers || [];
+      const canSubmit = Boolean(submitHandoff && !submitHandoff.disabled && !blockers.length &&
+        ["reviewing", "complete"].includes(status) && !approval && !needsPrefs);
+      const submitKey = `${step}:${context.url || ""}:${context.company || ""}:${submitHandoff?.text || ""}`;
+      if (!canSubmit || this.submitKey !== submitKey) this.confirmSubmit = false;
+      this.submitKey = submitKey;
+      this.canSubmit = canSubmit;
+      this.root.classList.toggle("submitted", status === "submitted");
 
       const pct = counts?.total
         ? Math.round((counts.filled / counts.total) * 100)
@@ -406,8 +494,8 @@
       : ""
   }</div>
   <div class="headbtns">
-    <button class="iconbtn" data-act="collapse" title="Collapse">${this.collapsed ? "+" : "−"}</button>
-    <button class="iconbtn" data-act="close" title="Close">×</button>
+    <button class="iconbtn" data-act="collapse" aria-label="${this.collapsed ? "Open SCREENMATE" : "Collapse SCREENMATE"}" title="${this.collapsed ? "Open" : "Collapse"}">${this.collapsed ? "+" : "−"}</button>
+    <button class="iconbtn" data-act="close" aria-label="Close SCREENMATE" title="Close">×</button>
   </div>
 </div>
 <div class="body">
@@ -463,13 +551,30 @@
   }
 
   ${
+    needsProfile
+      ? `<div class="sec warn" data-question="profile">
+           <div class="lbl w">Set up your profile first</div>
+           <div class="muted" style="color:#d2d2da;line-height:1.55">
+             Your profile is empty, so there is nothing to fill this form from. Add your
+             details, or import your resume, in settings. It takes a minute and every
+             application after this one uses it.
+           </div>
+           <div class="row" style="margin-top:12px">
+             <button class="btn" data-act="settings">Open settings</button>
+             <button class="btn ghost" data-act="runAnyway">Run anyway</button>
+           </div>
+         </div>`
+      : ""
+  }
+
+  ${
     needsPrefs
       ? `<div class="sec" data-question="prefs">
            <div class="lbl">Your standing answers</div>
            <div class="muted" style="line-height:1.55;margin-bottom:12px">
              Answer these once. SCREENMATE applies them on every application
-             instead of stopping to ask each time. Anything you leave as
-             <em>Ask each time</em> still pauses the run.
+             instead of stopping to ask each time. Unanswered optional questions
+             stay blank. Choose <em>Ask each time</em> to be prompted instead.
            </div>
            ${prefQuestions
              .map((q) => {
@@ -479,7 +584,7 @@
                  ${
                    q.free
                      ? `<input class="pfree" data-topic="${esc(q.topic)}"
-                          placeholder="${esc(q.placeholder || "")}"
+                          aria-label="${esc(q.label)}" placeholder="${esc(q.placeholder || "")}"
                           value="${esc(cur === "__ask__" ? "" : cur)}">`
                      : `<div class="pqo">${q.options
                          .map(
@@ -493,6 +598,9 @@
                  <button class="pask${cur === "__ask__" ? " on" : ""}"
                    data-act="pref" data-topic="${esc(q.topic)}" data-val="__ask__">
                    Ask each time</button>
+                 <button class="pask${cur === "" ? " on" : ""}"
+                   data-act="pref" data-topic="${esc(q.topic)}" data-val="">
+                   Ask only if required</button>
                </div>`;
              })
              .join("")}
@@ -507,8 +615,10 @@
     <div class="lbl">Live status</div>
     <div class="status"><span class="dot ${tone}"></span>${esc(STATUS_TEXT[status] || status)}</div>
     ${banner ? `<div class="muted t-warn" style="margin-top:9px;line-height:1.5">${esc(banner)}</div>` : ""}
+    ${blockers.length && ["reviewing", "complete"].includes(status)
+      ? `<button class="btn" data-act="answerMissing">Answer remaining questions (${blockers.length})</button>` : ""}
     ${
-      status === "idle"
+      status === "idle" && !needsPrefs && !needsProfile
         ? `<button class="btn" data-act="run">Run SCREENMATE</button>
            <button class="btn ghost" data-act="rescan">Rescan page</button>`
         : ""
@@ -521,33 +631,80 @@
     }
     ${
       !needsPrefs && ["idle", "complete", "reviewing", "error"].includes(status)
-        ? `<button class="disc" data-act="editPrefs">Edit standing answers</button>`
+        ? `<div class="discs"><button class="disc" data-act="editPrefs">Edit standing answers</button>
+           <button class="disc" data-act="settings">Profile &amp; resume</button></div>`
         : ""
     }
   </div>
 
   ${
-    approval
+    preflightReview || approvals.length > 1
+      ? `<div class="sec warn" data-question="review-queue">
+           <div class="lbl w">${preflightReview ? `Review ${approvals.length} items before autofill` : `${approvals.length} questions to review`}</div>
+           <div class="muted" style="margin-bottom:12px">${preflightReview ? "Set or skip each item below. SCREENMATE starts filling only after this review is settled." : "Review or skip the remaining questions together."}</div>
+           ${approvals.map((item) => this.approvalCard(item, s)).join("")}
+         </div>`
+      : ""
+  }
+
+  ${
+    approval && !preflightReview && approvals.length <= 1
       ? `<div class="sec warn" data-question="approval:${esc(approval.fieldId)}">
-           <div class="lbl w">User decision required</div>
-           <div class="card">
+           <div class="lbl w">${QUESTION_LABEL[kind] || QUESTION_LABEL.decision}${s.approvalCount > 1 ? ` · ${s.approvalCount} remaining` : ""}</div>
+           <div class="card${approval.busy ? " busy" : ""}">
              <div class="q">${esc(approval.label)}</div>
+             <div class="muted">${approval.required ? "Required by this site" : "Optional"}</div>
              <div class="why">SCREENMATE paused here. ${esc(approval.reason)}</div>
              ${
-               approval.kind === "file"
-                 ? `<div class="opts"><button class="opt" data-act="pickFile">Choose file…</button></div>`
+               kind === "file"
+                 ? `<div class="opts">
+                      ${
+                        approval.savedResume
+                          ? `<button class="opt go" data-act="attachSaved">Attach ${esc(approval.savedResume)}</button>`
+                          : ""
+                      }
+                      <button class="opt" data-act="chooseFile">${approval.savedResume ? "A different file…" : "Choose file…"}</button>
+                      <input type="file" class="afile" hidden>
+                      ${
+                        approval.sitePicker && !s.remote
+                          ? `<button class="opt" data-act="pickFile">Open the site's picker</button>`
+                          : ""
+                      }
+                    </div>`
                  : approval.free
-                 ? `<div class="opts"><input class="afree" placeholder="Type your answer">
-                      <button class="opt" data-act="answerFree">Save</button></div>`
-                 : `<div class="opts">${(approval.options?.length
-                     ? approval.options
-                     : ["Yes", "No"])
-                     .slice(0, 8)
-                     .map(
-                       (o) =>
-                         `<button class="opt" data-act="answer" data-val="${esc(o)}">${esc(o)}</button>`,
-                     )
-                     .join("")}</div>`
+                   ? approval.multiline
+                     ? `<textarea class="afree multi" aria-label="${esc(approval.label)}" placeholder="Type your answer"></textarea>
+                        <div class="opts"><button class="opt" data-act="answerFree">Save to form</button></div>`
+                     : `<div class="opts"><input class="afree" aria-label="${esc(approval.label)}" placeholder="Type your answer">
+                          <button class="opt" data-act="answerFree">Save</button></div>`
+                   : approval.multiple
+                     ? `<div class="opts">${(approval.options || [])
+                         .map(
+                           (o) =>
+                             `<button class="opt${this.picked(approval.fieldId).has(o) ? " on" : ""}" data-act="toggleOpt" data-val="${esc(o)}">${esc(o)}</button>`,
+                         )
+                         .join("")}</div>
+                        <div class="opts"><button class="opt go" data-act="answerMulti">Save ${this.picked(approval.fieldId).size || ""} selected</button></div>`
+                     : (approval.options || []).length > 8
+                       ? `<div class="opts"><select class="asel" aria-label="${esc(approval.label)}"><option value="">Choose…</option>${approval.options
+                           .map((o) => `<option>${esc(o)}</option>`)
+                           .join("")}</select>
+                            <button class="opt" data-act="answerSelect">Save</button></div>`
+                       : `<div class="opts">${(approval.options || [])
+                           .map(
+                             (o) =>
+                               `<button class="opt" data-act="answer" data-val="${esc(o)}">${esc(o)}</button>`,
+                           )
+                           .join("")}</div>`
+             }
+             ${approval.busy ? `<div class="abusy">Writing it into the form…</div>` : ""}
+             ${
+               approval.error
+                 ? `<div class="aerr">${esc(approval.error)}</div>
+                    <button class="alink" data-act="confirmManual">${
+                      kind === "file" ? "I attached it on the page" : "I set it on the page"
+                    }</button>`
+                 : ""
              }
              <div class="arow">
                ${
@@ -556,9 +713,9 @@
                         Remember this answer</label>`
                    : "<span></span>"
                }
-               <button class="skip" data-act="skip">Skip this one</button>
+               <button class="skip" data-act="skip">${approval.required ? "Leave blank for now" : "Skip this one"}</button>
              </div>
-             <div class="fine">SCREENMATE does not make sensitive decisions without you.</div>
+             <div class="fine">${QUESTION_FINE[kind] || QUESTION_FINE.decision}</div>
            </div>
          </div>`
       : ""
@@ -567,23 +724,30 @@
   ${
     changes.length
       ? `<div class="sec"${status === "reviewing" ? ' data-question="review"' : ""}>
-           <div class="lbl">${status === "reviewing" ? "Review changes" : "Changes on this step"}</div>
+           <div class="lbl">${status === "submitted" ? "Submitted answers" : status === "reviewing" ? "Review changes" : "Changes on this step"}</div>
            <div class="muted" style="margin-bottom:10px">
-             ${changes.length} field${changes.length === 1 ? "" : "s"} written. Edit anything that is wrong — nothing is submitted.
+             ${status === "submitted"
+               ? `${changes.length} field${changes.length === 1 ? "" : "s"} included in the submitted application. Changes here can no longer update it.`
+               : `${changes.length} field${changes.length === 1 ? "" : "s"} written. Edit anything that is wrong — nothing is submitted.`}
            </div>
            ${changes
              .map(
-               (c, i) => `<div class="diff${c.verified ? " ok" : ""}" data-i="${i}">
+               (c, i) => `<div class="diff${c.verified ? " ok" : ""}${c.step && c.step !== step ? " prior" : ""}" data-i="${i}">
                <div class="h">
                  <div class="n">${esc(c.label)}</div>
                  <div class="muted ${c.verified ? "t-good" : "t-warn"}">${
-                   c.fromPreference ? "your answer" : c.verified ? "verified" : "unverified"
+                   c.fromPreference || c.byUser ? "your answer" : c.verified ? "verified" : "unverified"
                  }</div>
                </div>
                <div class="v b">${esc(c.before || "Empty")}</div>
                <div class="v a">${esc(c.after)}</div>
+               ${c.step && c.step !== step ? `<div class="muted">Step ${esc(c.step)} — navigate back on the site to edit.</div>` : ""}
                <div class="cacts">
-                 <button class="mini" data-act="editChange" data-field="${esc(c.fieldId)}">Edit</button>
+                 ${
+                   c.file
+                     ? ""
+                     : `<button class="mini" data-act="editChange" data-field="${esc(c.fieldId)}">Edit</button>`
+                 }
                  ${
                    c.regenerable !== false && c.level === "review"
                      ? `<button class="mini" data-act="regen" data-field="${esc(c.fieldId)}">Regenerate</button>`
@@ -594,13 +758,13 @@
                <div class="editor" data-editor="${esc(c.fieldId)}" hidden>
                  ${
                    c.options?.length
-                     ? `<select class="efield">${c.options
+                     ? `<select class="efield" aria-label="Edit ${esc(c.label)}">${c.options
                          .map(
                            (o) =>
                              `<option${o === c.after ? " selected" : ""}>${esc(o)}</option>`,
                          )
                          .join("")}</select>`
-                     : `<textarea class="efield" rows="4">${esc(c.after)}</textarea>`
+                     : `<textarea class="efield" aria-label="Edit ${esc(c.label)}" rows="4">${esc(c.after)}</textarea>`
                  }
                  <div class="cacts">
                    <button class="mini go" data-act="saveEdit" data-field="${esc(c.fieldId)}">Save to page</button>
@@ -644,15 +808,39 @@
   }
 
   ${
-    submitHandoff
-      ? `<div class="sec warn">
-           <div class="lbl w">Submission is yours</div>
-           <div class="muted" style="color:#d2d2da;line-height:1.55">
-             SCREENMATE filled and verified what it safely could, across
-             ${pages.length || 1} step${(pages.length || 1) === 1 ? "" : "s"}.
-             It stops at <strong style="color:#eeeef2">"${esc(submitHandoff.text)}"</strong> —
-             that is the one button it will never press.
-           </div>
+    submitHandoff && ["reviewing", "complete", "submitting", "submitted"].includes(status)
+      ? `<div class="sec warn" data-question="submit">
+           <div class="lbl w">${status === "submitted" ? "Submitted" : "Submit your application"}</div>
+           ${
+             status === "submitted"
+               ? `<div class="muted t-good" style="line-height:1.55">✓ ${esc(submitted || "The site accepted it.")}</div>`
+               : status === "submitting"
+                 ? `<div class="muted" style="color:#d2d2da;line-height:1.55">Submitting, and waiting for the site to confirm…</div>`
+                 : `<div class="muted" style="color:#d2d2da;line-height:1.55">
+                      Filled and verified across ${pages.length || 1} step${(pages.length || 1) === 1 ? "" : "s"}.
+                      SCREENMATE presses <strong style="color:#eeeef2">"${esc(submitHandoff.text)}"</strong>
+                      only when you confirm.
+                    </div>
+                    ${
+                      blockers.length
+                        ? `<div class="muted t-warn" style="margin-top:8px;line-height:1.5">Still empty and required:
+                             ${esc(blockers.map((b) => b.message.replace(/ is required\.$/, "")).join(" · "))}.
+                             Fill ${blockers.length === 1 ? "it" : "them"} on the page first.</div>`
+                        : submitHandoff.disabled
+                          ? `<div class="muted t-warn" style="margin-top:8px;line-height:1.5">The site's
+                               "${esc(submitHandoff.text)}" button is disabled for now: it is still waiting
+                               on something, usually a field or a file. Check the page.</div>`
+                          : ""
+                    }
+                    ${
+                      this.confirmSubmit
+                        ? `<div class="row" style="margin-top:12px">
+                             <button class="btn go" data-act="submitGo">Confirm: submit to ${esc(context.company || "this company")}</button>
+                             <button class="btn ghost" data-act="submitCancel">Not yet</button>
+                           </div>`
+                        : `<button class="btn" data-act="submitAsk"${canSubmit ? "" : " disabled"}>Submit application</button>`
+                    }`
+           }
          </div>`
       : ""
   }
@@ -733,6 +921,46 @@
       card.classList.add("attn");
     }
 
+    /** The options you have ticked so far on a multi-choice question. */
+    picked(fieldId) {
+      this.multiPick ||= new Map();
+      if (!this.multiPick.has(fieldId)) this.multiPick.set(fieldId, new Set());
+      return this.multiPick.get(fieldId);
+    }
+
+    approvalCard(approval, s) {
+      const id = esc(approval.fieldId);
+      const kind = approval.kind || "decision";
+      const questionLabel = {
+        decision: "Your decision", missing: "Your answer", flagged: "Your experience", file: "File to attach",
+      }[kind] || "Your answer";
+      const fine = kind === "file"
+        ? "The file goes only to this site's upload."
+        : kind === "decision"
+          ? "SCREENMATE will not decide this for you."
+          : "Your answer goes into the form; SCREENMATE will not make it up.";
+      const controls = kind === "file"
+        ? `<div class="opts">${approval.savedResume ? `<button class="opt go" data-act="attachSaved" data-field="${id}">Attach ${esc(approval.savedResume)}</button>` : ""}<button class="opt" data-act="chooseFile" data-field="${id}">${approval.savedResume ? "Choose a different file…" : "Choose file…"}</button><input type="file" class="afile" data-field="${id}" hidden>${approval.sitePicker && !s.remote ? `<button class="opt" data-act="pickFile" data-field="${id}">Open the site's picker</button>` : ""}</div>`
+        : approval.free
+          ? approval.multiline
+            ? `<textarea class="afree multi" data-field="${id}" aria-label="${esc(approval.label)}" placeholder="Type your answer">${esc(approval.suggestedValue || "")}</textarea><div class="opts"><button class="opt" data-act="answerFree" data-field="${id}">Save to form</button></div>`
+            : `<div class="opts"><input class="afree" data-field="${id}" aria-label="${esc(approval.label)}" placeholder="Type your answer" value="${esc(approval.suggestedValue || "")}"><button class="opt" data-act="answerFree" data-field="${id}">Save</button></div>`
+          : approval.multiple
+            ? `<div class="opts">${(approval.options || []).map(o => `<button class="opt${this.picked(approval.fieldId).has(o) ? " on" : ""}" data-act="toggleOpt" data-field="${id}" data-val="${esc(o)}">${esc(o)}</button>`).join("")}</div><div class="opts"><button class="opt go" data-act="answerMulti" data-field="${id}">Save ${this.picked(approval.fieldId).size || ""} selected</button></div>`
+            : (approval.options || []).length > 8
+              ? `<div class="opts"><select class="asel" data-field="${id}" aria-label="${esc(approval.label)}"><option value="">Choose…</option>${approval.options.map(o => `<option>${esc(o)}</option>`).join("")}</select><button class="opt" data-act="answerSelect" data-field="${id}">Save</button></div>`
+              : `<div class="opts">${(approval.options || []).map(o => `<button class="opt" data-act="answer" data-field="${id}" data-val="${esc(o)}">${esc(o)}</button>`).join("")}</div>`;
+
+      return `<div class="card${approval.busy ? " busy" : ""}" data-review-field="${id}">
+        <div class="q">${esc(approval.label)}</div>
+        <div class="muted">${approval.required ? "Required by this site" : "Optional"} · ${questionLabel}</div>
+        <div class="why">${esc(approval.reason)}</div>${approval.suggestedValue ? `<div class="muted" style="margin-top:8px">Suggested from your saved profile. Review it before saving.</div>` : ""}${controls}
+        ${approval.error ? `<div class="aerr">${esc(approval.error)}</div><button class="alink" data-act="confirmManual" data-field="${id}">${kind === "file" ? "I attached it on the page" : "I set it on the page"}</button>` : ""}
+        <div class="arow">${approval.topic ? `<label class="rem"><input type="checkbox" class="remember" data-field="${id}" checked> Remember this answer</label>` : "<span></span>"}<button class="skip" data-act="skip" data-field="${id}">${approval.required ? "Leave blank for now" : "Skip this one"}</button></div>
+        <div class="fine">${fine}</div>
+      </div>`;
+    }
+
     /** Attribute selectors need escaping; matching on dataset does not. */
     editorFor(fieldId) {
       return [...this.root.querySelectorAll(".editor")].find(
@@ -742,30 +970,70 @@
 
     bind() {
       this.root.querySelectorAll("[data-act]").forEach((el) => {
+        const act = el.dataset.act;
         el.addEventListener("click", (ev) => {
+          if (!ev.isTrusted) return;
           ev.preventDefault();
           ev.stopPropagation();
-          const act = el.dataset.act;
+          const fieldId = el.dataset.field || this.state?.approval?.fieldId;
+          const currentApproval = this.state?.approvals?.find((item) => item.fieldId === fieldId);
+          if (currentApproval?.busy && ["answer", "answerFree", "answerSelect", "answerMulti", "toggleOpt", "skip", "chooseFile", "attachSaved", "confirmManual"].includes(act)) return;
           if (act === "collapse") return this.toggle();
           if (act === "close") return this.handlers.onClose?.();
           if (act === "sources") {
             this.sourcesOpen = !this.sourcesOpen;
             return this.render(this.state);
           }
-          const remember = () =>
-            this.root.querySelector(".remember")?.checked !== false;
+          const card = el.closest?.(".card");
+          const remember = () => card?.querySelector(".remember")?.checked !== false;
           if (act === "answer") {
-            return this.handlers.onAnswer?.(el.dataset.val, remember());
+            return this.handlers.onAnswer?.(fieldId, el.dataset.val, remember());
           }
           if (act === "answerFree") {
-            const input = this.root.querySelector(".afree");
+            const input = card?.querySelector(".afree");
             const v = input?.value.trim();
-            if (v) this.handlers.onAnswer?.(v, remember());
+            if (v) this.handlers.onAnswer?.(fieldId, v, remember());
             return;
           }
-          if (act === "skip") return this.handlers.onSkip?.();
+          if (act === "answerSelect") {
+            const v = card?.querySelector(".asel")?.value;
+            if (v) this.handlers.onAnswer?.(fieldId, v, remember());
+            return;
+          }
+          // Several answers to one question: toggle, then save them together.
+          if (act === "toggleOpt") {
+            const set = this.picked(fieldId);
+            if (set.has(el.dataset.val)) set.delete(el.dataset.val);
+            else set.add(el.dataset.val);
+            return this.render(this.state);
+          }
+          if (act === "answerMulti") {
+            const set = this.picked(fieldId);
+            if (set.size) this.handlers.onAnswer?.(fieldId, [...set], remember());
+            return;
+          }
+          if (act === "confirmManual") return this.handlers.onConfirmManual?.(fieldId);
+          if (act === "answerMissing") return this.handlers.onAnswerMissing?.();
+          if (act === "attachSaved") return this.handlers.onAttachSaved?.(fieldId);
+          // The panel's own picker, opened inside this click: the file you
+          // choose goes into the site's upload field.
+          if (act === "chooseFile") return card?.querySelector(".afile")?.click();
+          if (act === "settings") return this.handlers.onOpenSettings?.();
+          if (act === "runAnyway") return this.handlers.onRunAnyway?.();
+          // Submitting takes two deliberate clicks: ask, then confirm.
+          if (act === "submitAsk" || act === "submitCancel") {
+            if (!ev.isTrusted || (act === "submitAsk" && !this.canSubmit)) return;
+            this.confirmSubmit = act === "submitAsk";
+            return this.render(this.state);
+          }
+          if (act === "submitGo") {
+            if (!ev.isTrusted || !this.confirmSubmit || !this.canSubmit) return;
+            this.confirmSubmit = false;
+            return this.handlers.onSubmit?.();
+          }
+          if (act === "skip") return this.handlers.onSkip?.(fieldId);
           // Synchronous on purpose: the page's file picker only opens inside this click.
-          if (act === "pickFile") return this.handlers.onPickFile?.();
+          if (act === "pickFile") return this.handlers.onPickFile?.(fieldId);
           if (act === "editChange" || act === "cancelEdit") {
             const box = this.editorFor(el.dataset.field);
             if (box) box.hidden = act === "cancelEdit" ? true : !box.hidden;
@@ -781,6 +1049,10 @@
           if (act === "editPrefs") return this.handlers.onEditPrefs?.();
           if (act === "revertOne") return this.handlers.onRevertOne?.(el.dataset.field);
           if (act === "pref") {
+            if (el.dataset.val === "__ask__" || el.dataset.val === "") {
+              const input = [...this.root.querySelectorAll('.pfree')].find(i => i.dataset.topic === el.dataset.topic);
+              if (input) input.value = "";
+            }
             return this.handlers.onSetPref?.(el.dataset.topic, el.dataset.val);
           }
           if (act === "prefsDone") {
@@ -789,7 +1061,7 @@
             const free = {};
             this.root.querySelectorAll(".pfree").forEach((inp) => {
               const v = inp.value.trim();
-              if (v) free[inp.dataset.topic] = v;
+              free[inp.dataset.topic] = v || (this.state?.prefs?.[inp.dataset.topic] === "__ask__" ? "__ask__" : "");
             });
             return this.handlers.onPrefsDone?.(free);
           }
@@ -798,6 +1070,21 @@
           ]?.();
         });
       });
+      this.root.querySelectorAll(".afile").forEach((picker) => picker.addEventListener("change", (ev) => {
+        if (!ev.isTrusted) return;
+        const file = picker.files?.[0];
+        if (file) this.handlers.onAttachFile?.(file, picker.dataset.field || this.state?.approval?.fieldId);
+      }));
+      // Enter saves a one-line answer, as in any form.
+      this.root.querySelectorAll("input.afree").forEach((quick) => quick.addEventListener("keydown", (e) => {
+        const fieldId = quick.dataset.field || this.state?.approval?.fieldId;
+        if (!e.isTrusted || this.state?.approvals?.find((item) => item.fieldId === fieldId)?.busy) return;
+        if (e.key !== "Enter") return;
+        e.preventDefault();
+        const v = quick.value.trim();
+        const card = quick.closest(".card");
+        if (v) this.handlers.onAnswer?.(fieldId, v, card?.querySelector(".remember")?.checked !== false);
+      }));
       const head = this.root.querySelector(".head");
       if (this.collapsed) {
         head.style.cursor = "pointer";

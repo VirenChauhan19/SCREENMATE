@@ -1,0 +1,26 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Edge case form</title>
+<style>body{font:16px system-ui;padding:24px}label{display:block;margin:15px 0}input,select,textarea{padding:8px}#compatibility-results{white-space:pre-wrap;padding:20px;background:#eee}</style>
+</head><body><h1>Compatibility edge cases</h1><form id="application">
+<label>Full name<input id="full-name" required></label>
+<label>Short name<input id="short-name" maxlength="2"></label>
+<label>Email<input id="email" type="email" required></label>
+<label>Phone<input id="phone" type="tel"></label>
+<label>City and state<select id="city"><option value="">Choose</option><option>Portland, Maine</option><option>Portland, Oregon</option></select></label>
+<label>Multiple technologies<select id="technologies" multiple><option>React</option><option>Python</option><option>Go</option></select></label>
+<fieldset><legend>Areas of interest</legend><label><input type="checkbox" name="interest" value="Design">Design</label><label><input type="checkbox" name="interest" value="Engineering">Engineering</label></fieldset>
+<label>Resume<input id="resume" type="file" accept=".pdf" required></label>
+<label>Password<input type="password" id="password" value="fixture-secret"></label>
+<label>Social Security Number<input id="ssn" value="fixture-secret"></label>
+<label hidden>Hidden trap<input id="honeypot"></label>
+<label>Controlled input<input id="controlled"></label>
+<div id="shadow-host"></div>
+<button id="next" type="button">Next</button><button id="submit" type="button">Submit application</button>
+</form><nav><button type="button">Next page</button></nav>
+<form id="other"><input aria-label="Unrelated"><button type="button">Submit</button></form>
+<p id="outcome"></p>
+<script>
+document.getElementById('shadow-host').attachShadow({mode:'open'}).innerHTML='<label>Shadow name<input id="shadow-name"></label>';
+document.getElementById('controlled').addEventListener('input',event=>{setTimeout(()=>event.target.value='',80)});
+document.getElementById('next').addEventListener('click',()=>{document.getElementById('outcome').textContent='No transition';});
+document.getElementById('submit').addEventListener('click',()=>{location.hash='additional-step';document.getElementById('outcome').textContent='Additional verification required';});
+</script></body></html>

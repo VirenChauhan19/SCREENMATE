@@ -13,13 +13,40 @@ function envValue(name) {
 }
 
 /**
- * Seeds the extension's backend settings the way the popup does.
- *
- * Tests run on a throwaway Chrome profile, so storage starts empty. We drive the
- * extension's own popup page rather than poking storage from outside, which also
- * keeps the popup itself on the tested path.
+ * The profile the tests fill forms from. A fresh install starts with an empty
+ * profile (it would otherwise be typed into real applications), so the tests
+ * bring their own. Test data only: example.net is reserved for examples.
  */
-async function configureExtension(browser, extId, { backendUrl, apiKey } = {}) {
+const TEST_PROFILE = {
+  name: "Viren Chauhan",
+  email: "viren.test@example.net",
+  phone: "404-555-0142",
+  location: "Atlanta, Georgia",
+  country: "United States",
+  university: "SCAD",
+  degree: "BFA Game Design",
+  minor: "Applied AI",
+  graduationDate: "2027",
+  currentCompany: "",
+  currentTitle: "",
+  portfolio: "https://virenchauhan.com",
+  linkedin: "https://www.linkedin.com/in/viren-test",
+  github: "",
+  skills: ["React", "TypeScript", "Python", "Unreal Engine", "Unity", "AI integrations"],
+};
+
+/**
+ * Seeds the extension's backend settings and a test profile, from one of the
+ * extension's own pages.
+ *
+ * Tests run on a throwaway Chrome profile, so storage starts empty. A fresh
+ * install also opens the welcome page; it is closed here so tests start from
+ * a clean set of tabs.
+ */
+async function configureExtension(browser, extId, { backendUrl, apiKey, profile } = {}) {
+  for (const p of await browser.pages()) {
+    if (p.url().includes(`${extId}/options/`)) await p.close();
+  }
   const page = await browser.newPage();
   await page.goto(`chrome-extension://${extId}/popup/popup.html`, {
     waitUntil: "domcontentloaded",
@@ -29,14 +56,16 @@ async function configureExtension(browser, extId, { backendUrl, apiKey } = {}) {
       await chrome.storage.local.set({
         backendUrl: cfg.backendUrl,
         apiKey: cfg.apiKey,
+        profile: cfg.profile,
       });
     },
     {
       backendUrl: backendUrl || "http://localhost:3000",
       apiKey: apiKey ?? envValue("SCREENMATE_API_KEY"),
+      profile: profile || TEST_PROFILE,
     },
   );
   await page.close();
 }
 
-module.exports = { envValue, configureExtension };
+module.exports = { envValue, configureExtension, TEST_PROFILE };

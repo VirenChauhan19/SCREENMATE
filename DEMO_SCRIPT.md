@@ -19,7 +19,8 @@ access key from `extension/config.json`.
       present**. Lever and Ashby postings need no login and run cleanest; Greenhouse
       works too. Workday only shows its form after you sign in to that employer's
       Workday, so avoid it on stage.
-- [ ] Your resume file somewhere easy to find — the run pauses to ask for it.
+- [ ] Your resume saved in settings (toolbar icon → **Profile, resume & settings**):
+      it is then attached for you wherever a form asks for a resume.
 - [ ] The web portal open in tab 2 as the fallback:
       `https://temporary-instant-oboe-q3v79yt.vercel.app`
 - [ ] Window **maximized**
@@ -163,8 +164,10 @@ salary and veteran-status fields still sitting empty on the page.
 **Point at:** the Submit button, still sitting there untouched.
 
 > "And this is the line I care most about. It will click Next all day. It will never
-> click Submit. That's not the model's judgement — it's a hard refusal in the
-> navigation code, because a submitted application can't be taken back."
+> click Submit on its own. That's not the model's judgement — it's a hard refusal in
+> the navigation code, because a submitted application can't be taken back. When
+> I've reviewed it, I press Submit in the panel and confirm, and only then does it
+> press the site's button."
 
 ---
 
@@ -179,11 +182,11 @@ pulses it once.
 
 **Point at:** the activity line showing the answer was recorded from *your* decision.
 
-**The resume card:** on a real posting the run pauses on **Resume/CV**. Click
-**Choose file…** — it opens the page's own file picker — and pick your resume.
+**The resume:** point at the **Resume/CV** line in the activity feed.
 
-> "It asks for my resume and opens the site's own picker. It never uploads a file
-> by itself."
+> "I saved my resume once, in settings. It attaches it wherever a form asks for a
+> resume, first, because some sites read it and fill fields from it. Anything
+> else, a cover letter say, it asks me for."
 
 ---
 
@@ -196,8 +199,9 @@ pulses it once.
 > Revert on its own. Accept all, or revert all — the revert puts the page back
 > exactly as it found it."
 
-> "It never submits. SCREENMATE completed what it could safely automate and left final
-> control with me."
+> "It never submits on its own. SCREENMATE completed what it could safely automate
+> and left final control with me: Submit, then Confirm, and it tells me what the
+> site said back."
 
 ---
 

@@ -1,0 +1,194 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SCREENMATE settings</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  [hidden] { display: none !important; }
+  body {
+    background: #0e0e11; color: #d2d2da;
+    font: 400 14px/1.55 ui-sans-serif, -apple-system, "Segoe UI", Inter, system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 760px; margin: 0 auto; padding: 28px 20px 80px; }
+  header { display: flex; align-items: center; gap: 10px; margin-bottom: 22px; }
+  .mark { width: 26px; height: 26px; border-radius: 7px; background: #7c6cf5;
+          display: grid; place-items: center; color: #fff; font-weight: 700; font-size: 13px; }
+  .word { font-size: 13px; font-weight: 600; letter-spacing: .16em; color: #eeeef2; }
+  header .sub { margin-left: auto; font-size: 12px; color: #6b6b78; }
+  .welcome {
+    border: 1px solid rgba(124,108,245,.35); background: rgba(42,37,69,.45);
+    border-radius: 12px; padding: 18px; margin-bottom: 20px;
+  }
+  .welcome h1 { font-size: 18px; color: #eeeef2; font-weight: 600; margin-bottom: 6px; }
+  .welcome ol { margin: 10px 0 0 18px; color: #a8a8b5; font-size: 13px; }
+  .welcome li { margin-top: 4px; }
+  section {
+    border: 1px solid #1d1d24; background: #111115; border-radius: 12px;
+    padding: 18px; margin-bottom: 16px;
+  }
+  h2 { font-size: 11px; letter-spacing: .12em; text-transform: uppercase; font-weight: 600;
+       color: #8a8a98; margin-bottom: 4px; }
+  .lead { font-size: 12.5px; color: #6b6b78; margin-bottom: 12px; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 14px; }
+  .grid .full { grid-column: 1 / -1; }
+  @media (max-width: 560px) { .grid { grid-template-columns: 1fr; } }
+  label { display: block; font-size: 11.5px; color: #8a8a98; margin: 8px 0 4px; }
+  input[type=text], input[type=email], input[type=url], input[type=tel], input[type=password], textarea, input:not([type]) {
+    width: 100%; background: #16161b; border: 1px solid #25252e; border-radius: 8px;
+    padding: 8px 10px; color: #eeeef2; font: inherit; font-size: 13px; outline: none;
+  }
+  input:focus, textarea:focus { border-color: #7c6cf5; }
+  textarea { resize: vertical; min-height: 60px; }
+  input.placeholder-warn { border-color: #d8a350; }
+  button {
+    border: none; border-radius: 8px; background: #7c6cf5; color: #fff;
+    font: inherit; font-size: 13px; font-weight: 500; padding: 9px 16px; cursor: pointer;
+  }
+  button:hover { background: #8f82f7; }
+  button.ghost { background: #16161b; border: 1px solid #25252e; color: #a8a8b5; }
+  button.ghost:hover { border-color: #33333e; color: #eeeef2; }
+  button.small { padding: 5px 10px; font-size: 12px; }
+  .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 14px; }
+  .note { font-size: 12px; color: #6b6b78; margin-top: 8px; line-height: 1.5; }
+  .ok { color: #58b58a; }
+  .bad { color: #d4736b; }
+  .warn { color: #d8a350; }
+  .filebox {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    border: 1px solid #25252e; border-radius: 10px; padding: 12px 14px; background: #16161b;
+  }
+  .filebox .fname { color: #eeeef2; font-weight: 500; font-size: 13.5px; word-break: break-all; }
+  .filebox .fmeta { color: #6b6b78; font-size: 12px; }
+  .check { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #a8a8b5; margin-top: 12px; cursor: pointer; }
+  .check input { accent-color: #7c6cf5; width: 15px; height: 15px; }
+  .diff { border: 1px solid #25252e; border-radius: 10px; padding: 10px 12px; margin-top: 12px; }
+  .drow { display: flex; gap: 10px; font-size: 12.5px; padding: 4px 0; align-items: flex-start; }
+  .dk { color: #6b6b78; width: 110px; flex: none; }
+  .dv { color: #eeeef2; word-break: break-word; flex: 1; }
+  .dold { color: #55555f; text-decoration: line-through; }
+  .dnew { color: #58b58a; }
+  .pq { border-top: 1px solid #1d1d24; padding: 12px 0; }
+  .pq:first-of-type { border-top: none; }
+  .pql { font-size: 13px; color: #d2d2da; margin-bottom: 8px; }
+  .pqo { display: flex; flex-wrap: wrap; gap: 6px; }
+  .popt {
+    border: 1px solid #25252e; background: #16161b; color: #8a8a98; border-radius: 7px;
+    padding: 6px 11px; font-size: 12px; cursor: pointer;
+  }
+  .popt:hover { border-color: #33333e; color: #d2d2da; background: #16161b; }
+  .popt.on { border-color: #7c6cf5; background: rgba(42,37,69,.8); color: #ada3f9; font-weight: 500; }
+  .popt.ask.on { border-color: #d8a350; color: #d8a350; background: rgba(46,36,21,.5); }
+  .mem { display: flex; gap: 10px; align-items: flex-start; padding: 8px 0; border-top: 1px solid #1d1d24; font-size: 12.5px; }
+  .mem:first-child { border-top: none; }
+  .mem .mq { flex: 1; color: #a8a8b5; }
+  .mem .ma { color: #eeeef2; font-weight: 500; }
+  kbd { background: #16161b; border: 1px solid #25252e; border-radius: 5px; padding: 1px 6px; font: inherit; font-size: 12px; color: #eeeef2; }
+  a { color: #ada3f9; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="mark">S</div><div class="word">SCREENMATE</div>
+    <div class="sub" id="version"></div>
+  </header>
+
+  <div class="welcome" id="welcome" hidden>
+    <h1>Welcome to SCREENMATE</h1>
+    <div class="note" style="margin:0;color:#a8a8b5">
+      SCREENMATE fills job applications from your profile, asks you what only you can answer,
+      and submits only when you confirm. Two minutes of setup:
+    </div>
+    <ol>
+      <li>Add your resume below. It fills your profile and gets attached to applications for you.</li>
+      <li>Check your profile, and add a phone number: nearly every form asks for one.</li>
+      <li>Answer the standing questions once, so you are not asked on every site.</li>
+      <li>Open any job application and click the SCREENMATE pill, or press <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd>.</li>
+    </ol>
+  </div>
+
+  <section id="resumeSection">
+    <h2>Your resume</h2>
+    <div class="lead">Saved on this device. SCREENMATE attaches it where an application asks for a resume, and reads it to fill your profile.</div>
+    <div class="filebox" id="resumeBox" hidden>
+      <div>
+        <div class="fname" id="resumeName"></div>
+        <div class="fmeta" id="resumeMeta"></div>
+      </div>
+      <button class="ghost small" id="resumeRemove">Remove</button>
+    </div>
+    <div class="row">
+      <input type="file" id="cvFile" accept=".pdf,.docx,.doc,.txt,.md,.rtf,.odt" style="font-size:12.5px;color:#a8a8b5">
+      <button id="cvGo">Save and read into my profile</button>
+    </div>
+    <label class="check"><input type="checkbox" id="autoAttach" checked> Attach my resume automatically when an application asks for one</label>
+    <div class="note" id="cvStatus"></div>
+    <div class="note" id="cvImported"></div>
+    <div id="cvDiff"></div>
+  </section>
+
+  <section>
+    <h2>Your profile</h2>
+    <div class="lead">The only source of facts about you. The agent cannot write a value that is not here.</div>
+    <div class="grid">
+      <div><label for="name">Full name</label><input id="name" autocomplete="off"></div>
+      <div><label for="email">Email</label><input id="email" type="email" autocomplete="off"></div>
+      <div><label for="phone">Phone</label><input id="phone" type="tel" autocomplete="off" placeholder="e.g. 404-555-0199"></div>
+      <div><label for="location">City, state</label><input id="location" autocomplete="off" placeholder="e.g. Atlanta, Georgia"></div>
+      <div><label for="country">Country</label><input id="country" autocomplete="off" placeholder="e.g. United States"></div>
+      <div><label for="currentCompany">Current company</label><input id="currentCompany" autocomplete="off"></div>
+      <div><label for="currentTitle">Current title</label><input id="currentTitle" autocomplete="off"></div>
+      <div><label for="university">University</label><input id="university" autocomplete="off"></div>
+      <div><label for="degree">Degree</label><input id="degree" autocomplete="off" placeholder="e.g. BS Computer Science"></div>
+      <div><label for="minor">Minor</label><input id="minor" autocomplete="off"></div>
+      <div><label for="graduationDate">Graduation</label><input id="graduationDate" autocomplete="off" placeholder="e.g. May 2026"></div>
+      <div><label for="portfolio">Website / portfolio</label><input id="portfolio" type="url" autocomplete="off"></div>
+      <div><label for="linkedin">LinkedIn</label><input id="linkedin" type="url" autocomplete="off"></div>
+      <div><label for="github">GitHub</label><input id="github" type="url" autocomplete="off"></div>
+      <div class="full"><label for="skills">Skills (comma-separated)</label><textarea id="skills"></textarea></div>
+      <div class="full"><label for="experience">Experience and project details</label><textarea id="experience" rows="7" placeholder="Import your resume or paste relevant resume bullets"></textarea><div class="note">Used to ground answers about your past work. Keep details accurate; SCREENMATE will not invent missing experience.</div></div>
+    </div>
+    <div class="note warn" id="profileWarn"></div>
+    <div class="row"><button id="save">Save profile</button><span class="note" id="saveNote" style="margin:0"></span></div>
+  </section>
+
+  <section>
+    <h2>Standing answers</h2>
+    <div class="lead">Save answers to common questions. SCREENMATE reuses matching answers and leaves unknown optional questions blank. Choose <em>Ask each time</em> when you want to decide on every application.</div>
+    <div id="prefs"></div>
+    <div id="prefsStatus" class="note" role="status"></div>
+  </section>
+
+  <section>
+    <h2>Remembered answers</h2>
+    <div class="lead">Answers you gave on an application and asked SCREENMATE to remember. Delete one to be asked again.</div>
+    <div id="memory"></div>
+  </section>
+
+  <section>
+    <h2>Backend</h2>
+    <div class="lead">Where the agent runs. OpenRouter and Exa keys live on that server, never in the extension.</div>
+    <label for="backendUrl">Server URL</label>
+    <input id="backendUrl" placeholder="https://your-app.vercel.app" spellcheck="false">
+    <label for="apiKey">Access key</label>
+    <input id="apiKey" type="password" placeholder="sm_..." spellcheck="false">
+    <div class="row"><button class="ghost" id="saveUrl">Save backend settings</button></div>
+    <div class="note" id="health">Checking backend…</div>
+  </section>
+
+  <section>
+    <h2>Shortcut</h2>
+    <div class="note" style="margin:0">
+      <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd> opens or folds the panel on the page you are on.
+      Change it at <span style="color:#a8a8b5">chrome://extensions/shortcuts</span>.
+    </div>
+  </section>
+</div>
+<script src="../content/prefs.js"></script>
+<script src="../popup/common.js"></script>
+<script src="options.js"></script>
+</body>
+</html>

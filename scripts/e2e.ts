@@ -20,6 +20,7 @@ const BASE = "http://localhost:3000";
 
 /** Node has no browser Origin, so it authenticates the way the extension does. */
 const API_KEY = (() => {
+  if (process.env.SCREENMATE_API_KEY) return process.env.SCREENMATE_API_KEY;
   if (!existsSync(".env.local")) return "";
   const line = readFileSync(".env.local", "utf8")
     .split("\n")
@@ -180,7 +181,10 @@ async function main() {
 
   console.log(`\nverified=${verified} verifyFailures=${failures}`);
   const open = state.fields.filter((f) => f.required && !hasValue(f));
-  console.log(`RESULT: ${open.length === 0 && report.blockers.length === 0 ? "PASS" : "FAIL"}`);
+  const passed = open.length === 0 && report.blockers.length === 0 &&
+    failures === 0 && verified > 0 && report.checks.every(check => check.ok);
+  console.log(`RESULT: ${passed ? "PASS" : "FAIL"}`);
+  if (!passed) process.exitCode = 1;
 }
 
 main().catch((e) => {

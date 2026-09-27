@@ -1,5 +1,7 @@
 "use client";
 
+import { useEffect, useRef } from "react";
+
 import { Building2, Clock3, MapPin } from "lucide-react";
 import { SECTIONS } from "@/lib/application";
 import type {
@@ -26,13 +28,14 @@ interface Props {
   busy: boolean;
   lastWrite: { fieldId: string; at: number } | null;
   onChange: (fieldId: string, value: string) => void;
-  onApprovalAnswer: (fieldId: string, value: string) => void;
+  onApprovalAnswer: (fieldId: string, value: string, remember?: boolean) => void;
   onAcceptAll: () => void;
   onAccept: (fieldId: string) => void;
   onReject: (fieldId: string) => void;
   onEdit: (fieldId: string, value: string) => void;
   onRegenerate: (fieldId: string) => void;
   onFinishReview: () => void;
+  onReopenReview: () => void;
 }
 
 export function ApplicationForm({
@@ -54,7 +57,15 @@ export function ApplicationForm({
   onEdit,
   onRegenerate,
   onFinishReview,
+  onReopenReview,
 }: Props) {
+  const attentionRef = useRef<HTMLDivElement>(null);
+  const approvalId = approval?.fieldId;
+  useEffect(() => {
+    if (approvalId || showReview || showSuccess) {
+      attentionRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    }
+  }, [approvalId, showReview, showSuccess]);
   const errorsFor = (id: string) =>
     state.validationErrors.filter((e) => e.fieldId === id);
 
@@ -91,13 +102,14 @@ export function ApplicationForm({
       </header>
 
       {/* Interrupts sit above the form, in reading order, not in a modal. */}
-      <div className="mt-8 space-y-4 empty:mt-0">
+      <div ref={attentionRef} className="mt-8 space-y-4 empty:mt-0">
         {approvalField && approval && (
           <ApprovalCard
+            key={approvalField.id}
             field={approvalField}
             reason={approval.reason}
             remaining={approvalCount}
-            onAnswer={(value) => onApprovalAnswer(approvalField.id, value)}
+            onAnswer={(value, remember) => onApprovalAnswer(approvalField.id, value, remember)}
           />
         )}
 
@@ -106,7 +118,7 @@ export function ApplicationForm({
             state={state}
             report={report}
             stats={stats}
-            onReview={onFinishReview}
+            onReview={onReopenReview}
           />
         )}
 

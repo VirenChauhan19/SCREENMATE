@@ -30,11 +30,11 @@ const GENERIC_REASON =
   "This question touches a protected or personal topic. Only you can answer it.";
 
 const FILE_REASON =
-  "A resume or document upload has to come from your machine. SCREENMATE flags it and leaves it to you.";
+  "Which file to send is your choice. SCREENMATE attaches your saved resume where a resume is asked for, and asks you about any other file.";
 
 const SPECIFIC_REASONS: { match: RegExp; reason: string }[] = [
   {
-    match: /sponsor|visa|work authori[sz]ation|citizenship|immigration/i,
+    match: /sponsor|visa|work authori[sz]ation|citizen|permanent resident|green card|immigration/i,
     reason:
       "Immigration and work-authorization status is a legal declaration only you can make.",
   },

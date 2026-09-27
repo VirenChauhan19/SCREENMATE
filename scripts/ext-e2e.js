@@ -203,7 +203,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
         };
       });
 
-    if (!(await clickPanel("run screenmate"))) throw new Error("no Run button");
+    if (!(await clickPanel("edit standing answers"))) throw new Error("no preference editor button");
     await sleep(1200);
 
     // This suite deliberately exercises the OTHER branch: every standing answer

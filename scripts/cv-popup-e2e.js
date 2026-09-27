@@ -1,5 +1,5 @@
 /**
- * Drives CV import through the real popup UI with a real file.
+ * Drives CV import through the real settings page with a real file.
  *
  * The API was tested with curl and passed; the popup path was broken the whole
  * time. This exercises what a person actually clicks.
@@ -40,10 +40,10 @@ const BACKEND = process.argv[2] || "http://localhost:3000";
     console.log(`backend: ${BACKEND}`);
 
     for (const name of ["sample-cv.pdf", "sample-cv.docx"]) {
-      console.log(`\n=== ${name} through the popup ===`);
+      console.log(`\n=== ${name} through the settings page ===`);
       const popup = await browser.newPage();
       popup.on("pageerror", (e) => console.log("  [popup error]", e.message));
-      await popup.goto(`chrome-extension://${extId}/popup/popup.html`, {
+      await popup.goto(`chrome-extension://${extId}/options/options.html`, {
         waitUntil: "domcontentloaded",
       });
       await sleep(1200);
@@ -69,13 +69,13 @@ const BACKEND = process.argv[2] || "http://localhost:3000";
         status = await popup.evaluate(
           () => document.getElementById("cvStatus").textContent.trim(),
         );
-        if (!/^Reading/.test(status)) break;
+        if (!/Reading/.test(status)) break;
       }
       const cls = await popup.evaluate(
         () => document.getElementById("cvStatus").className,
       );
       console.log(`  status: "${status}"`);
-      check(`${name}: popup reports success`, cls.includes("ok"), status);
+      check(`${name}: settings page reports success`, cls.includes("ok"), status);
 
       const rows = await popup.evaluate(() =>
         [...document.querySelectorAll(".drow")].map((r) => ({
@@ -113,7 +113,7 @@ const BACKEND = process.argv[2] || "http://localhost:3000";
     const bad = path.join(os.tmpdir(), `not-a-cv-${process.pid}.png`);
     fs.writeFileSync(bad, Buffer.from([0x89, 0x50, 0x4e, 0x47, 13, 10, 26, 10]));
     const popup = await browser.newPage();
-    await popup.goto(`chrome-extension://${extId}/popup/popup.html`, {
+    await popup.goto(`chrome-extension://${extId}/options/options.html`, {
       waitUntil: "domcontentloaded",
     });
     await sleep(1000);

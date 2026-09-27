@@ -5,7 +5,7 @@
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
-    width: 320px; background: #0e0e11; color: #d2d2da;
+    width: 300px; background: #0e0e11; color: #d2d2da;
     font: 400 13px/1.5 ui-sans-serif, -apple-system, "Segoe UI", system-ui, sans-serif;
     -webkit-font-smoothing: antialiased;
   }
@@ -19,31 +19,21 @@
   .sec { padding: 14px; border-bottom: 1px solid #17171c; }
   .sec:last-of-type { border-bottom: none; }
   .lbl { font-size: 10px; letter-spacing: .11em; text-transform: uppercase;
-         font-weight: 600; color: #6b6b78; margin-bottom: 9px; }
-  label { display: block; font-size: 11px; color: #8a8a98; margin: 9px 0 4px; }
-  input, textarea {
-    width: 100%; background: #131317; border: 1px solid #23232b; border-radius: 7px;
-    padding: 7px 9px; color: #eeeef2; font: inherit; font-size: 12.5px; outline: none;
-  }
-  input:focus, textarea:focus { border-color: #7c6cf5; }
-  textarea { resize: vertical; min-height: 54px; }
+         font-weight: 600; color: #6b6b78; margin-bottom: 7px; }
   button {
     width: 100%; border: none; border-radius: 8px; background: #7c6cf5; color: #fff;
     font: inherit; font-size: 13px; font-weight: 500; padding: 9px; cursor: pointer;
-    margin-top: 12px;
   }
   button:hover { background: #8f82f7; }
-  button.ghost { background: #131317; border: 1px solid #23232b; color: #a8a8b5; }
+  button.ghost { background: #131317; border: 1px solid #23232b; color: #a8a8b5; margin-top: 10px; }
   button.ghost:hover { border-color: #2e2e38; color: #eeeef2; }
-  .note { font-size: 11px; color: #6b6b78; margin-top: 9px; line-height: 1.5; }
+  .note { font-size: 11.5px; color: #6b6b78; margin-top: 9px; line-height: 1.5; }
   .ok { color: #58b58a; }
   .bad { color: #d4736b; }
-  .diff { border:1px solid #23232b; border-radius:7px; padding:9px; margin-top:9px; }
-  .drow { display:flex; gap:8px; font-size:11.5px; padding:3px 0; align-items:flex-start; }
-  .dk { color:#6b6b78; width:74px; flex:none; }
-  .dv { color:#eeeef2; word-break:break-word; flex:1; }
-  .dold { color:#55555f; text-decoration:line-through; }
-  .dnew { color:#58b58a; }
+  .warn { color: #d8a350; }
+  .line { font-size: 12.5px; color: #a8a8b5; margin-top: 3px; }
+  .line b { color: #eeeef2; font-weight: 500; }
+  kbd { background: #131317; border: 1px solid #23232b; border-radius: 4px; padding: 0 5px; font: inherit; font-size: 11px; color: #d2d2da; }
 </style>
 </head>
 <body>
@@ -55,49 +45,14 @@
   </div>
 
   <div class="sec">
-    <div class="lbl">Import from CV</div>
-    <div class="note" style="margin:0 0 9px">
-      Reads a PDF, DOCX or text CV and fills the fields below. Nothing is saved
-      until you review it — anything the CV did not say is left alone.
-    </div>
-    <input type="file" id="cvFile" accept=".pdf,.docx,.txt,.md" style="font-size:12px">
-    <button class="ghost" id="cvGo">Read CV</button>
-    <div class="note" id="cvStatus"></div>
-    <div class="note" id="cvImported"></div>
-    <div id="cvDiff"></div>
+    <div class="lbl">You</div>
+    <div id="summary"></div>
+    <div class="note warn" id="summaryWarn"></div>
+    <button class="ghost" id="settings">Profile, resume &amp; settings</button>
+    <div class="note"><kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd> opens the panel on any page.</div>
   </div>
 
-  <div class="sec">
-    <div class="lbl">Your profile</div>
-    <div class="note" style="margin:0 0 4px">
-      The only source of personal facts. The agent cannot write a value that isn't here.
-    </div>
-    <label>Name</label><input id="name">
-    <label>Email</label><input id="email">
-    <label>Location</label><input id="location">
-    <label>University</label><input id="university">
-    <label>Degree</label><input id="degree">
-    <label>Minor</label><input id="minor">
-    <label>Graduation</label><input id="graduationDate">
-    <label>Portfolio</label><input id="portfolio">
-    <label>LinkedIn</label><input id="linkedin">
-    <label>Skills (comma-separated)</label><textarea id="skills"></textarea>
-    <button id="save">Save profile</button>
-  </div>
-
-  <div class="sec">
-    <div class="lbl">Backend</div>
-    <label>Server URL</label>
-    <input id="backendUrl" placeholder="https://your-app.vercel.app" spellcheck="false">
-    <label>Access key</label>
-    <input id="apiKey" type="password" placeholder="sm_..." spellcheck="false">
-    <div class="note">
-      OpenRouter and Exa keys live on the server, never in the extension.
-      The access key is what stops strangers spending your credits.
-    </div>
-    <button class="ghost" id="saveUrl">Save backend settings</button>
-  </div>
-
+  <script src="common.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>

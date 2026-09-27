@@ -22,4 +22,5 @@ export const userProfile: UserProfile = {
     "Unity",
     "AI integrations",
   ],
+  experience: "",
 };
