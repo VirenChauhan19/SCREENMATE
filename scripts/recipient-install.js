@@ -12,7 +12,11 @@ const { unzipSync } = require("fflate");
 const CHROME = path.join(
   "C:", "Program Files", "Google", "Chrome", "Application", "chrome.exe",
 );
-const ZIP = path.resolve(__dirname, "..", "dist", "screenmate-1.0.0.zip");
+// The zip `npm run package:ext` builds for the version in the manifest.
+const VERSION = JSON.parse(
+  fs.readFileSync(path.resolve(__dirname, "..", "extension", "manifest.json"), "utf8"),
+).version;
+const ZIP = path.resolve(__dirname, "..", "dist", `screenmate-${VERSION}.zip`);
 const STAGE = path.join(os.tmpdir(), `screenmate-recipient-${process.pid}`);
 const PROFILE = path.join(os.tmpdir(), `screenmate-recipient-profile-${process.pid}`);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));

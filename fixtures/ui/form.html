@@ -1,0 +1,15 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Fixture Company application</title>
+<style>body{font:16px system-ui;background:#eef0f5;margin:24px}form{max-width:540px}label{display:block;margin:18px 0}input,select{display:block;padding:9px;width:100%;box-sizing:border-box}button{padding:12px}#result{margin:20px 0}</style>
+<script src="/fixtures/ui/chrome.js"></script></head><body><h1>Software Engineer application</h1><p>Fixture Company. Local UI integration test; no employer receives this form.</p>
+<form id="application">
+<label>Full name<input name="fullName" required></label>
+<label>Email<input name="email" type="email" required></label>
+<label>Phone<input name="phone" type="tel" required></label>
+<label>Notice period<input name="notice" required></label>
+<label>Do you require sponsorship?<select name="sponsorship" required><option value="">Choose</option><option>Yes</option><option>No</option></select></label>
+<label>Desired salary<input name="salary"></label>
+<button type="submit">Submit application</button></form><p id="result" role="status">Not submitted</p>
+<script>document.getElementById('application').addEventListener('submit',event=>{event.preventDefault();document.getElementById('result').textContent='Application submitted. Thank you for applying.';});</script>
+<button id="openPanel" type="button">Open test panel</button>
+<script src="/extension/content/scan.js"></script><script src="/extension/content/act.js"></script><script src="/extension/content/nav.js"></script><script src="/extension/content/prefs.js"></script><script src="/extension/content/panel.js"></script><script src="/extension/content/frames.js"></script><script src="/extension/content/main.js"></script>
+<script>document.getElementById('openPanel').onclick=()=>window.__screenmateMount();</script></body></html>

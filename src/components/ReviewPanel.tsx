@@ -107,7 +107,8 @@ export function ReviewPanel({
           <button
             type="button"
             onClick={onDone}
-            className="flex items-center gap-1.5 rounded-lg bg-accent-500 px-4 py-2 text-[12.5px] font-medium text-white transition-colors hover:bg-accent-400"
+            disabled={!allReviewed || busy}
+            className="flex items-center gap-1.5 rounded-lg bg-accent-500 px-4 py-2 text-[12.5px] font-medium text-white transition-colors hover:bg-accent-400 disabled:cursor-not-allowed disabled:opacity-40"
           >
             Finish review
             <ArrowRight size={13} strokeWidth={2.5} />
@@ -220,6 +221,7 @@ function ChangeRow({
       {editing && (
         <div className="mt-3">
           <textarea
+            aria-label={`Edit ${change.label}`}
             rows={4}
             value={draft}
             onChange={(e) => setDraft(e.target.value)}

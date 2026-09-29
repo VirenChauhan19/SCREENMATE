@@ -237,7 +237,7 @@ export function executeAction(
           `Allowed: ${field.options.join(", ")}`,
         );
       }
-      if (!isGroundedValue(field.type, value, profile)) {
+      if (!isGroundedValue(field.type, value, profile, field.label)) {
         return refuse(
           `Blocked ungrounded value for ${field.label}`,
           "Value was not present in the user profile.",

@@ -72,6 +72,8 @@ export interface UserProfile {
   linkedin: string;
   location: string;
   skills: string[];
+  /** Verbatim resume bullets that can ground experience answers. */
+  experience?: string;
 }
 
 /* ---------------- Research ---------------- */

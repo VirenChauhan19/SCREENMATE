@@ -1,7 +1,9 @@
 /**
  * Full agent run on an iframe-embedded portal, through the real extension.
- * This is the architectural test: the panel must be elected into the frame that
- * actually holds the form, while the job context comes from the parent page.
+ * This is the architectural test: the run must be elected into the frame that
+ * actually holds the form, its panel drawn by the top page (a tall iframe
+ * would scroll a panel of its own out of sight), and the job context read
+ * from the parent page.
  */
 const puppeteer = require("puppeteer-core");
 const path = require("path");
@@ -52,12 +54,13 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
       const has = await f.evaluate(() => !!document.getElementById("screenmate-root")).catch(() => false);
       if (has) owners.push(f === page.mainFrame() ? "top" : "iframe");
     }
-    console.log(`panel mounted in: ${owners.join(", ") || "nowhere"}`);
-    check("exactly one frame owns the panel", owners.length === 1);
-    check("the frame with the form won", owners[0] === "iframe");
+    console.log(`panel drawn in: ${owners.join(", ") || "nowhere"}`);
+    check("exactly one panel on the page", owners.length === 1);
+    check("the panel is drawn by the top page", owners[0] === "top");
 
     const formFrame = page.frames().find((f) => f !== page.mainFrame());
-    const sr = async (fn, arg) => formFrame.evaluate(fn, arg);
+    // The panel lives in the top page; the form, and the run, in the iframe.
+    const sr = async (fn, arg) => page.mainFrame().evaluate(fn, arg);
 
     // Open the panel first; its own "Current context" section is the honest
     // read of what the agent thinks it is applying to.
@@ -79,7 +82,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     check("job title read from the parent page", /logistics/i.test(ctx.title));
     await sr(() => {
       const root = document.getElementById("screenmate-root").shadowRoot;
-      [...root.querySelectorAll("button")].find((b) => /run screenmate/i.test(b.textContent))?.click();
+      [...root.querySelectorAll("button")].find((b) => /edit standing answers/i.test(b.textContent))?.click();
     });
     await sleep(1500);
     await sr(() => {
@@ -118,7 +121,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     }
     console.log(`final status: ${status} (asked ${answered})`);
 
-    const vals = await sr(() => window.__vals());
+    const vals = await formFrame.evaluate(() => window.__vals());
     console.log("form values:");
     for (const [k, v] of Object.entries(vals)) {
       console.log(`   ${k.padEnd(6)} ${JSON.stringify(String(v).slice(0, 56))}`);

@@ -4,8 +4,13 @@ import { AgentPanel } from "@/components/AgentPanel";
 import { ApplicationForm } from "@/components/ApplicationForm";
 import { TopBar } from "@/components/TopBar";
 import { useScreenmate } from "@/hooks/useScreenmate";
+import { AccessGate } from "@/components/AccessGate";
 
 export default function Page() {
+  return <AccessGate><ScreenmateApp /></AccessGate>;
+}
+
+function ScreenmateApp() {
   const sm = useScreenmate();
 
   return (
@@ -41,6 +46,7 @@ export default function Page() {
             onEdit={sm.editChange}
             onRegenerate={sm.regenerate}
             onFinishReview={sm.completeReview}
+            onReopenReview={sm.reopenReview}
           />
         </main>
 

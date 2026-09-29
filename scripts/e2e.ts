@@ -20,6 +20,7 @@ const BASE = "http://localhost:3000";
 
 /** Node has no browser Origin, so it authenticates the way the extension does. */
 const API_KEY = (() => {
+  if (process.env.SCREENMATE_API_KEY) return process.env.SCREENMATE_API_KEY;
   if (!existsSync(".env.local")) return "";
   const line = readFileSync(".env.local", "utf8")
     .split("\n")
@@ -150,6 +151,15 @@ async function main() {
   for (const id of approvals) state = setFieldByUser(state, id, "No");
   console.log(`after user: ${state.completedFields}/${state.totalFields}`);
 
+  /* follow-up passes, as the hook runs them: while a required, non-sensitive field is still empty */
+  for (let pass = 2; pass <= 4; pass++) {
+    const stillOpen = state.fields.filter((f) => f.required && !hasValue(f) && !f.sensitive);
+    if (stillOpen.length === 0) break;
+    approvals = await runPass(`pass ${pass}`);
+    for (const id of approvals) state = setFieldByUser(state, id, "No");
+    console.log(`after pass ${pass}: ${state.completedFields}/${state.totalFields}`);
+  }
+
   /* review */
   for (const c of changes) state = acceptField(state, c.fieldId);
 
@@ -171,7 +181,10 @@ async function main() {
 
   console.log(`\nverified=${verified} verifyFailures=${failures}`);
   const open = state.fields.filter((f) => f.required && !hasValue(f));
-  console.log(`RESULT: ${open.length === 0 && report.blockers.length === 0 ? "PASS" : "FAIL"}`);
+  const passed = open.length === 0 && report.blockers.length === 0 &&
+    failures === 0 && verified > 0 && report.checks.every(check => check.ok);
+  console.log(`RESULT: ${passed ? "PASS" : "FAIL"}`);
+  if (!passed) process.exitCode = 1;
 }
 
 main().catch((e) => {

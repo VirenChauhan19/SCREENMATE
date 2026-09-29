@@ -45,6 +45,35 @@ fails closed and refuses to act.
 
 ## Demo
 
+### Autofill with fewer interruptions
+
+The extension starts from your saved profile and answers immediately; the standing-answer
+questionnaire is optional. It fills matching answers, attaches your saved resume when
+enabled, and rescans for questions revealed by earlier answers before pausing. Unknown
+optional questions stay blank unless you explicitly selected **Ask each time**.
+Required facts that are missing still need an answer: SCREENMATE does not invent them.
+
+Answers entered in the extension are remembered by default (uncheck **Remember this
+answer** to opt out). Matching tolerates question punctuation and common equivalent
+wordings, while preserving distinctions such as country, inverted questions, and
+previous versus desired salary. A repeated question on the same step reuses the answer
+you just saved. Manage saved answers in the extension settings.
+
+The web demo also remembers confirmed choices on this browser, scoped to the applicant
+and exact question. Editing a remembered choice updates it; clearing it forgets it.
+Web-demo memory and extension memory are separate.
+
+Cross-site filling runs through the extension. Coverage is based on the controls a
+portal exposes, not a promise that every portal works. Native fields, supported ARIA
+widgets, open shadow roots, and accessible application frames can be handled; login,
+CAPTCHA, closed widgets, and missing required information can still need intervention.
+Submission remains a separate explicit action.
+
+Local checks: `npm test`, `npm run typecheck`, `npm run lint`. Run
+`node scripts/ui-harness-server.js` and open `http://127.0.0.1:8101/autofill`
+to exercise duplicate questions, a dynamically revealed school field, optional gaps,
+and remembered answers after reload without sending anything to an employer.
+
 The portal surface is a job application for a **Software Developer Intern** role
 at **Nova Systems**. Some fields arrive pre-filled, the way a real portal that already
 knows you would behave. The rest are empty.
@@ -128,14 +157,17 @@ src/lib/cv.ts            text extraction
 src/hooks/useScreenmate  the orchestration loop (web)
 
 extension/manifest.json  MV3
-extension/background.js  service worker — all network calls, keys never exposed
-extension/content/scan.js    DOM → ApplicationState (ARIA widgets, shadow DOM)
+extension/background.js  service worker — network calls, keys never exposed; carries a
+                         run across page loads; relays an iframe form's panel
+extension/content/scan.js    DOM → ApplicationState (ARIA widgets, shadow DOM, stable ids)
 extension/content/nav.js     wizard navigation; the submit refusal lives here
 extension/content/prefs.js   standing answers + cross-site option matching
-extension/content/act.js     tool writes into the DOM + verification
+extension/content/act.js     tool writes into the DOM, file attach, verification
 extension/content/panel.js   the panel, in a shadow root
+extension/content/frames.js  draws an iframe form's panel in the top page
 extension/content/main.js    the orchestration loop (extension)
-extension/popup/         profile editor + backend URL
+extension/options/       settings: resume, profile, standing + remembered answers, backend
+extension/popup/         status: backend health, profile readiness, open on this page
 ```
 
 ## Tools
@@ -148,7 +180,7 @@ extension/popup/         profile editor + backend URL
 | `requestUserApproval(fieldId, reason)` | hands a sensitive field back to the user |
 | `validateApplication()` | runs the eight-check validation pass |
 | `researchCompany(reason)` | fetches external context — only when it earns the call |
-| `advance()` *(extension)* | clicks Next to reach the following step. Never Submit |
+| `advance()` *(extension)* | clicks Next to reach the following step. Never Submit: only your confirmation in the panel sends an application |
 
 In the extension these same tools write into real `<input>`, `<select>`,
 `<textarea>` and radio-group elements. Writes go through the native value setter
@@ -233,9 +265,10 @@ https://<your-app>.vercel.app/api/health
 → {"ok":true,"requiresKey":true,"configured":{"openrouter":true,"exa":true}}
 ```
 
-Finally, open the extension popup, set **Server URL** to your deployment and
-paste the **access key**. Chrome will ask to allow that host — that is the
-`optional_host_permissions` grant, requested only for the backend you chose.
+Finally, open SCREENMATE's settings (toolbar icon → **Profile, resume &
+settings**), set **Server URL** to your deployment and paste the **access key**.
+Chrome will ask to allow that host — that is the `optional_host_permissions`
+grant, requested only for the backend you chose.
 
 ### Why there is an access key
 
@@ -275,29 +308,43 @@ fixtures built on each platform's real DOM patterns:
 | Ashby-style | typeahead that only opens its list once you type | works |
 | Workday-style | `data-automation-id` widgets, portaled listboxes, wizard | works |
 | Taleo / iCIMS-style | the whole form lives in an **iframe** | works |
+| Wizards that load a new page per step | the run's script dies with each page | works |
 
 The content script runs in every frame, because an embedded form sits in an
 iframe while the job posting sits in the parent. Frames that find a form announce
-themselves and the richest one takes the panel, so exactly one panel appears. The
-job title, company and description are then read from the **parent** page — the
-iframe alone knows nothing about the job.
+themselves and the richest one runs the form. Its panel is drawn by the **top**
+page (an embedded form's iframe is often taller than the screen, so a panel
+pinned inside it would scroll away), with state and clicks relayed through the
+extension's own messaging, which the page cannot read or forge. The job title,
+company and description are read from the **parent** page — the iframe alone
+knows nothing about the job.
 
-Three classes of field are surfaced but never filled: **file uploads** (a resume
-has to come from your machine), **consent checkboxes**, and anything matching a
-protected topic.
+Questions are read the way a screen reader would name them (`aria-labelledby`
+before `aria-label`, and never a placeholder like "Select…"), falling back to the
+text written just above an unlabelled control. Radio groups and "check all that
+apply" boxes are one question each. Every question keeps the same id for the
+life of the page, so an answered one is never asked again because something
+appeared above it.
 
-Verified against live employer postings as well as fixtures. `npm run probe:real`
-opens real application pages and reports what the scanner sees — read-only: it
-never writes a field, never clicks a navigation control, never submits.
+Resume uploads are filled from the resume you saved in settings; any other file
+(a cover letter) is yours to attach, and an optional one does not stop the run.
+Anything matching a protected topic is never answered by the agent.
 
-A representative run:
+Verified end to end against live employer postings, not only fixtures: a full
+run (fill, verify, ask, review, never submit) on each of these:
 
-| Live posting | Fields | Locked as sensitive |
-|---|---|---|
-| Cloudflare (Greenhouse) | 25 | sponsorship, gender, ethnicity, veteran, disability, start date |
-| Instrumentl (Lever) | 11 | work authorization, sponsorship |
-| Metabase (Lever) | 12 | none present on that form |
-| Supermove (Lever) | 11 | none present on that form |
+| Live posting | What it exercised |
+|---|---|
+| Discord (Greenhouse) | react-select country and location pickers, phone widget, 11 EEO answers from standing answers, resume attach |
+| Palantir (Lever) | a 33-box "check all that apply", resume attach that makes the site fill fields, Singapore citizenship locked as sensitive |
+| Ramp (Ashby) | location typeahead, consent radios whose question is a plain paragraph, "prove you're not a bot" questions handed to you |
+| Hugging Face (Workable) | styled radios over hidden inputs, URL fields that are textareas |
+| Rippling | unlabelled dropdowns, a sponsorship question that is only a paragraph above one |
+| Discord, embedded in a company page | the iframe case, panel drawn in the top page |
+
+`npm run probe:real` opens real application pages and reports what the scanner
+sees — read-only: it never writes a field, never clicks a navigation control,
+never submits.
 
 Limits worth stating: a portal that renders inputs into a *closed* shadow root,
 or draws its form on a canvas, is unreadable. Expired or listing-only pages
@@ -307,13 +354,27 @@ defeats the scanner it reports that instead of guessing.
 ### Multi-step applications
 
 Real applications are wizards. SCREENMATE fills a step, verifies every write,
-clicks **Next**, re-scans the new step, and keeps going — up to 8 steps.
+clicks **Next**, re-scans the new step, and keeps going — up to 8 steps. A
+portal that loads a whole new page for each step (iCIMS, Taleo, many older
+ones) ends the page's script mid-click; the run leaves a note with the
+extension first, and the next page picks it up where it left off. A "Next" that
+is not part of the form (a results list's pagination, a carousel) is never
+clicked.
 
-It will **never** click Submit. That is enforced in `nav.js`, not left to the
-model, because a submitted application cannot be taken back. Anything matching
-submit / apply now / finish / confirm and… / agree and… is refused, and a button
-reading "Submit and continue" is refused too. When no Next button remains, the
-run stops and hands you the submit control explicitly.
+Before leaving a step, everything required that is still empty, and every
+sensitive question without a standing answer, is asked of you in the panel,
+with the right input: the site's own dropdown options, a text box for essays, a
+file picker for uploads. Your answer goes into the form and is verified; if the
+page does not take it, the question stays open and says why.
+
+The agent will **never** click Submit on its own. That is enforced in `nav.js`,
+not left to the model, because a submitted application cannot be taken back:
+anything matching submit / apply now / finish / confirm and… / agree and… is
+refused, "Submit and continue" included. When no Next button remains, the panel
+offers **Submit application**, then **Confirm**. Only that second click presses
+the site's submit button, and the panel reports what the site said: its
+confirmation, or the fields it rejected. A disabled submit button is reported
+as such, not pressed.
 
 ### Pointing a checkout at the deployment
 
@@ -358,24 +419,32 @@ make recipients paste their own.
 For anything wider than handing out zips, the Chrome Web Store is the real
 answer: a developer account, a one-off fee, and review time measured in days.
 
-### Importing your CV
+### Your resume and profile
 
-The popup reads a **PDF, DOCX or plain-text** CV and fills your profile from it.
-Text is extracted server-side (`pdfjs` for PDF, the document XML for DOCX) and a
-model pulls out the structured fields.
+A fresh install opens the settings page with a short setup. It starts with an
+empty profile: whatever sits there is typed into real applications, so there is
+no sample data to forget to replace.
+
+Add your resume (**PDF, DOCX or plain text**) and two things happen. The file is
+kept on this device, and attached wherever an application asks for a resume —
+before anything else is filled, since some sites (Lever, Rippling) read it and
+fill fields from it; the agent then corrects anything the site's own reader got
+wrong. And its text is read into your profile: extracted server-side (`pdfjs`
+for PDF, the document XML for DOCX), with a model pulling out the fields.
 
 It is a parser, not a writer: values are copied verbatim, and anything the CV
 does not state comes back as **missing** rather than invented — these values get
 typed into real applications, so a wrong one is worse than a blank one. Nothing
-is saved until you see a before/after diff and apply it.
+is saved until you see a before/after diff and apply it; **applying saves it**,
+with no second button to forget. Automatic attaching can be turned off.
 
-**Applying an import saves it.** There is no second button to forget, and the
-popup then shows which CV the profile came from and when — so you are never left
-wondering whether to upload it again. Your profile lives in `chrome.storage`
-on that device; the CV itself is never stored, only the fields extracted from it.
+The profile covers what forms ask: name, email, phone, city, country, current
+company and title, education, website, LinkedIn, GitHub and skills. The settings
+page flags anything essential that is missing, and any sample value left over
+from an old build.
 
-A scanned, image-only PDF has no text layer, and the popup says so instead of
-returning an empty profile.
+A scanned, image-only PDF has no text layer, and the settings page says so
+instead of returning an empty profile.
 
 ### Fixing the agent's work
 
@@ -403,20 +472,27 @@ Answers are matched by topic, not by wording, so "No" set once also answers
 on a custom dropdown, the extension opens it and reads the real options — it will
 not guess "Yes/No" at a question whose answers are nothing of the kind.
 
+Any other question you answer in the panel (your phone, "How did you hear about
+us?") can be remembered too, keyed by its wording. The settings page lists
+these **remembered answers**, and forgetting one means you are asked again.
+
 ### Chrome extension
 
 1. `npm run dev` — the extension needs the backend for the agent, research, and
    the policy layer. API keys never enter the extension.
 2. Open `chrome://extensions`, enable **Developer mode**, choose
-   **Load unpacked**, and select the `extension/` folder.
+   **Load unpacked**, and select the `extension/` folder. The settings page
+   opens: add your resume and check your profile.
 3. Visit any job application page. A collapsed SCREENMATE pill appears when the
-   page looks like an application form; click it to open the panel.
-4. Click the toolbar icon to edit your profile or point the extension at a
-   different backend URL.
+   page looks like an application form, including one a single-page site shows
+   only after you press Apply. Click it, or press **Alt+Shift+S** on any page.
+4. The toolbar icon shows whether the backend is reachable and your profile is
+   ready, and opens settings.
 
 Auto-detection is deliberately conservative: it needs at least four fields,
 something name- or email-shaped, and either six-plus fields or a resume/cover
-letter/experience question. A login box will not summon a panel.
+letter/experience question. A login box will not summon a panel, and a pill you
+close stays closed on that page.
 
 ```
 OPENROUTER_API_KEY=sk-or-...

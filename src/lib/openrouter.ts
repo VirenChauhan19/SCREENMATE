@@ -37,6 +37,7 @@ export async function completeJson<S extends z.ZodTypeAny>(
   const timeout = setTimeout(() => controller.abort(), 45_000);
 
   let res: Response;
+  let payload: { choices?: { message?: { content?: string } }[] } | null;
   try {
     res = await fetch(OPENROUTER_URL, {
       method: "POST",
@@ -54,7 +55,10 @@ export async function completeJson<S extends z.ZodTypeAny>(
         messages,
       }),
     });
+    if (!res.ok) throw new OpenRouterError(`OpenRouter returned ${res.status}`);
+    payload = await res.json();
   } catch (err) {
+    if (err instanceof OpenRouterError) throw err;
     throw new OpenRouterError(
       err instanceof Error && err.name === "AbortError"
         ? "Model request timed out"
@@ -63,17 +67,6 @@ export async function completeJson<S extends z.ZodTypeAny>(
   } finally {
     clearTimeout(timeout);
   }
-
-  if (!res.ok) {
-    const body = await res.text().catch(() => "");
-    throw new OpenRouterError(
-      `OpenRouter returned ${res.status}: ${body.slice(0, 200)}`,
-    );
-  }
-
-  const payload = (await res.json().catch(() => null)) as {
-    choices?: { message?: { content?: string } }[];
-  } | null;
 
   const content = payload?.choices?.[0]?.message?.content;
   if (typeof content !== "string" || !content.trim()) {

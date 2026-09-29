@@ -120,11 +120,11 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
         };
       });
 
-    // First click surfaces the standing-answers setup.
+    // Preferences are optional now; open them explicitly for this scenario.
     await page.evaluate(() => {
       const sr = document.getElementById("screenmate-root").shadowRoot;
       [...sr.querySelectorAll("button")]
-        .find((b) => /run screenmate/i.test(b.textContent))
+        .find((b) => /edit standing answers/i.test(b.textContent))
         ?.click();
     });
     await sleep(1200);
@@ -135,8 +135,8 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
           .getElementById("screenmate-root")
           .shadowRoot.querySelector(".pq"),
     );
-    console.log(`standing-answers setup shown on first run: ${prefsShown}`);
-    check("asks for standing answers before acting", prefsShown);
+    console.log(`standing-answer editor opened explicitly: ${prefsShown}`);
+    check("standing answers can be edited before running", prefsShown);
 
     // Answer them the way a person would: decline every protected question.
     const chosen = await page.evaluate(() => {
@@ -291,7 +291,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
         advancing: [...sr.querySelectorAll(".feed .msg")].filter((n) =>
           /advancing to step/i.test(n.textContent),
         ).length,
-        handoff: !!sr.querySelector(".sec.warn .lbl.w")?.textContent.match(/submission is yours/i),
+        handoff: !!sr.querySelector("[data-question=submit] .lbl.w")?.textContent.match(/submit your application/i),
       };
     });
 

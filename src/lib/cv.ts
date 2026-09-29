@@ -26,13 +26,20 @@ async function extractPdf(buf: ArrayBuffer): Promise<string> {
   // parsed locally and failed in production, which is the worst way to find out.
   const { extractText: pdfText, getDocumentProxy } = await import("unpdf");
   const pdf = await getDocumentProxy(new Uint8Array(buf));
-  const { text } = await pdfText(pdf, { mergePages: true });
-  const joined = Array.isArray(text) ? text.join("\n\n") : text;
-  return joined.replace(/[^\S\n]+/g, " ");
+  try {
+    if (pdf.numPages > 50) throw new Error("CV exceeds 50 pages");
+    const { text } = await pdfText(pdf, { mergePages: true });
+    const joined = Array.isArray(text) ? text.join("\n\n") : text;
+    return joined.replace(/[^\S\n]+/g, " ");
+  } finally { await pdf.loadingTask.destroy(); }
 }
 
 function extractDocx(buf: ArrayBuffer): string {
-  const files = unzipSync(new Uint8Array(buf));
+  const files = unzipSync(new Uint8Array(buf), { filter: file => {
+    if (file.name !== "word/document.xml") return false;
+    if (file.originalSize > 4 * 1024 * 1024) throw new Error("Document body is too large");
+    return true;
+  } });
   const xml = files["word/document.xml"];
   if (!xml) throw new Error("No document body in this .docx");
   return strFromU8(xml)
@@ -40,9 +47,15 @@ function extractDocx(buf: ArrayBuffer): string {
     .replace(/<\/w:p>/g, "\n")
     .replace(/<w:br\s*\/>/g, "\n")
     .replace(/<[^>]+>/g, "")
-    .replace(/&amp;/g, "&")
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&#(x[0-9a-f]+|\d+);/gi, (_, n: string) => {
+      const value = n[0].toLowerCase() === "x" ? parseInt(n.slice(1), 16) : Number(n);
+      return value <= 0x10ffff ? String.fromCodePoint(value) : "";
+    })
+    .replace(/&amp;/g, "&")
     .replace(/[ \t]+/g, " ")
     .replace(/\n{3,}/g, "\n\n")
     .trim();

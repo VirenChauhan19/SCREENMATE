@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { createHmac, randomBytes, timingSafeEqual as cryptoEqual } from "node:crypto";
 
 /**
  * Access control for the hosted API.
@@ -12,6 +13,32 @@ import { NextResponse } from "next/server";
  */
 
 const HEADER = "x-screenmate-key";
+export const SESSION_COOKIE = "screenmate_session";
+export const SESSION_SECONDS = 8 * 60 * 60;
+
+export function sameOrigin(request: Request): boolean {
+  return request.headers.get("origin") === new URL(request.url).origin;
+}
+
+export function createSession(): string {
+  const key = process.env.SCREENMATE_API_KEY;
+  if (!key) throw new Error("Access key is not configured");
+  const payload = `${Date.now() + SESSION_SECONDS * 1000}.${randomBytes(24).toString("hex")}`;
+  return `${payload}.${createHmac("sha256", key).update(payload).digest("hex")}`;
+}
+
+export function hasSession(request: Request): boolean {
+  const key = process.env.SCREENMATE_API_KEY;
+  if (!key) return false;
+  const token = request.headers.get("cookie")?.split(";").map(c => c.trim())
+    .find(c => c.startsWith(`${SESSION_COOKIE}=`))?.slice(SESSION_COOKIE.length + 1);
+  if (!token || token.length > 200) return false;
+  const [expires, nonce, signature, extra] = token.split(".");
+  if (extra || !/^\d+$/.test(expires) || !/^[a-f0-9]{48}$/.test(nonce || "") ||
+      Number(expires) <= Date.now() || Number(expires) > Date.now() + SESSION_SECONDS * 1000) return false;
+  const expected = createHmac("sha256", key).update(`${expires}.${nonce}`).digest("hex");
+  return timingSafeEqual(signature || "", expected);
+}
 
 /** Extensions get a stable chrome-extension:// origin; browsers do not. */
 function corsHeaders(origin: string | null): Record<string, string> {
@@ -45,41 +72,31 @@ export function preflight(request: Request): NextResponse {
 /**
  * Returns a 401 response when the caller is not authorised, or null when it is.
  *
- * If SCREENMATE_API_KEY is unset the gate is open — that keeps local development
- * frictionless. Production sets it, and `/api/health` reports which mode is live
- * so a misconfigured deploy is obvious rather than silently public.
+ * Development may run without a key. Production fails closed when the key is
+ * missing. Browser clients authenticate with signed sessions; extensions use
+ * the access-key header.
  */
 export function requireKey(request: Request): NextResponse | null {
   const expected = process.env.SCREENMATE_API_KEY;
-  if (!expected) return null;
+  if (!expected) {
+    if (process.env.NODE_ENV !== "production") return null;
+    return withCors(NextResponse.json({ error: "Backend access is not configured.",
+      reason: "Set SCREENMATE_API_KEY on the server." }, { status: 503 }), request);
+  }
 
   const provided = request.headers.get(HEADER);
   if (provided && timingSafeEqual(provided, expected)) return null;
 
-  // The bundled web demo is served from this same deployment and calls these
-  // routes from the browser, where it cannot hold a secret. Same-origin
-  // requests are therefore allowed through.
-  //
-  // Be clear about what that is worth: an Origin header can be forged, so this
-  // is a deterrent against a shared URL quietly spending your credits, not a
-  // defence against someone who actually wants in. Rate limiting at the edge
-  // is the real control.
-  const origin = request.headers.get("origin");
-  const host = request.headers.get("host");
-  if (origin && host) {
-    try {
-      if (new URL(origin).host === host) return null;
-    } catch {
-      /* malformed origin: fall through to the 401 */
-    }
-  }
+  // Origin is a CSRF check, never authentication. The web UI must first
+  // exchange its key for a signed, expiring HttpOnly session cookie.
+  if (sameOrigin(request) && hasSession(request)) return null;
 
   return withCors(
     NextResponse.json(
       {
         error: "Not authorised",
         reason:
-          "This SCREENMATE backend requires an access key. Add it in the extension popup.",
+          "This SCREENMATE backend requires an access key. Sign in to the web app or add it in extension settings.",
       },
       { status: 401 },
     ),
@@ -93,8 +110,6 @@ export function isKeyRequired(): boolean {
 
 /** Constant-time compare so the key cannot be guessed a character at a time. */
 function timingSafeEqual(a: string, b: string): boolean {
-  if (a.length !== b.length) return false;
-  let diff = 0;
-  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
-  return diff === 0;
+  const left = Buffer.from(a), right = Buffer.from(b);
+  return left.length === right.length && cryptoEqual(left, right);
 }

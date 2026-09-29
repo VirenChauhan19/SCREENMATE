@@ -1,10 +1,12 @@
 {
   "manifest_version": 3,
+  "minimum_chrome_version": "119",
   "name": "SCREENMATE",
-  "version": "1.0.0",
-  "description": "A context-aware AI agent that reads the application form you're on, fills what it safely can across every step, verifies each write, stops for decisions only you can make, and never presses submit.",
+  "version": "1.1.0",
+  "description": "An AI agent for job applications: reads the form you're on, fills it from your profile, asks you what only you can answer, and submits only when you confirm.",
   "permissions": [
     "storage",
+    "unlimitedStorage",
     "activeTab",
     "scripting"
   ],
@@ -25,6 +27,18 @@
       "128": "icons/icon128.png"
     }
   },
+  "options_ui": {
+    "page": "options/options.html",
+    "open_in_tab": true
+  },
+  "commands": {
+    "toggle-panel": {
+      "suggested_key": {
+        "default": "Alt+Shift+S"
+      },
+      "description": "Open or fold the SCREENMATE panel on this page"
+    }
+  },
   "icons": {
     "16": "icons/icon16.png",
     "32": "icons/icon32.png",
@@ -38,7 +52,6 @@
         "https://*/*"
       ],
       "exclude_matches": [
-        "https://*.google.com/*",
         "https://accounts.google.com/*",
         "https://*.paypal.com/*",
         "https://*.stripe.com/*"
@@ -49,11 +62,13 @@
         "content/nav.js",
         "content/prefs.js",
         "content/panel.js",
+        "content/frames.js",
         "content/main.js"
       ],
       "run_at": "document_idle",
       "all_frames": true,
-      "match_about_blank": false
+      "match_about_blank": true,
+      "match_origin_as_fallback": true
     }
   ],
   "optional_host_permissions": [
