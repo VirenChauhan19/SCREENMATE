@@ -2,5 +2,7 @@ fixtures
 scripts
 dist
 .tsbuild
+.env*
+extension/config.json
 *.md
 !README.md

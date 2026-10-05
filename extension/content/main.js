@@ -30,6 +30,7 @@
     panel: null,
     gen: 0,
     running: false,
+    autoResume: false,
     status: "idle",
     context: {},
     fields: [],
@@ -51,6 +52,7 @@
     needsPrefs: false,
     /** Sensitive fields already settled this run — prevents re-asking forever. */
     resolvedSensitive: new Set(),
+    deferredDropdowns: new Set(),
     stats: EMPTY_STATS(),
   };
 
@@ -124,7 +126,8 @@
    * Rescans the DOM and re-classifies through the backend. Classification is the
    * ONLY source of policy levels — if it fails we fail closed and touch nothing.
    */
-  async function observe() {
+  async function observe(gen = S.gen) {
+    const signatureBefore = window.__screenmateScan.pageSignature();
     const scanned = window.__screenmateScan.scanFields();
     S.context = window.__screenmateScan.pageContext();
 
@@ -144,6 +147,7 @@
       })),
     });
 
+    if (stale(gen) || signatureBefore !== window.__screenmateScan.pageSignature()) return false;
     if (!res.ok) {
       S.fields = [];
       S.banner = `${res.error}${res.reason ? ` — ${res.reason}` : ""}`;
@@ -157,7 +161,7 @@
     S.fields = res.data.fields.map((f) => ({
       ...f,
       el: byId.get(f.id)?.el,
-      value: byId.get(f.id)?.value || "",
+      value: byId.get(f.id)?.el ? window.__screenmateScan.currentValue(byId.get(f.id).el) : "",
     }));
 
     // Opening the panel observes, and so does the start of a run. Re-reading is
@@ -221,7 +225,7 @@
 
   /* ---------------- research ---------------- */
 
-  async function runResearch() {
+  async function runResearch(gen = S.gen) {
     if (S.research) {
       log("think", "Research reused", "Context for this company is already loaded.");
       markStep("research", "done");
@@ -234,6 +238,7 @@
       role: S.context.jobTitle,
       roleId: S.context.url,
     });
+    if (stale(gen)) return;
     if (!res.ok) {
       log("warn", "External research unavailable", "Continuing without it.");
       markStep("research", "skipped");
@@ -256,28 +261,28 @@
   /* ---------------- act + verify ---------------- */
 
   async function queueApproval(field, reason) {
+    if (!window.__screenmateAct.canAutomate(field) || (field.value || '').trim()) return;
+    // Dropdowns should not interrupt the application. A missing personal answer
+    // stays visibly incomplete for final review rather than being fabricated.
+    if (field.type === 'select') {
+      if ((field.value || '').trim() || S.resolvedSensitive.has(field.id)) return;
+      const key = `${S.step}:${field.id}`;
+      if (!S.deferredDropdowns.has(key)) {
+        S.deferredDropdowns.add(key);
+        log('warn', `${field.label} left for review`, reason || field.sensitiveReason || 'No matching profile value or saved answer.');
+      }
+      return;
+    }
     if (S.resolvedSensitive.has(field.id)) return;
     if (S.approvalQueue.some((a) => a.fieldId === field.id)) return;
-
-    let options = null;
-    let free = true;
-    if (field.type === "select") {
-      // Never guess. Open the widget and read its real choices, so we cannot
-      // offer "Yes/No" on a question whose answers are nothing of the kind.
-      options = field.options?.length
-        ? field.options
-        : await window.__screenmateAct.readOptions(field);
-      free = !options || options.length === 0;
-      if (!free) field.options = options;
-    }
 
     S.approvalQueue.push({
       fieldId: field.id,
       label: field.label,
       reason: field.sensitiveReason || reason || "",
-      options: free ? null : options,
+      options: null,
       topic: field.topic || null,
-      free,
+      free: true,
     });
   }
 
@@ -291,6 +296,9 @@
   async function applyPreferences(gen) {
     let handled = 0;
     for (const field of S.fields) {
+      if (stale(gen)) return handled;
+      refreshValues();
+      if (!window.__screenmateAct.canAutomate(field)) continue;
       // Any field the policy recognised as a standing-answer question, whether
       // or not it also tripped the sensitive list.
       if (!field.topic) continue;
@@ -302,10 +310,12 @@
         const discovered = await window.__screenmateAct.readOptions(field);
         if (discovered.length) field.options = discovered;
       }
+      if (stale(gen)) return handled;
       const hit = window.__screenmatePrefs.resolve(field, S.prefs);
       if (!hit) continue;
 
-      const res = await window.__screenmateAct.applyWrite(field, hit.value);
+      const res = await window.__screenmateAct.applyWrite(field, hit.value, { automatic: true });
+      if (stale(gen)) return handled;
       if (!res.ok) {
         log(
           "warn",
@@ -318,7 +328,8 @@
       window.__screenmateAct.highlight(field.el);
       const check = window.__screenmateAct.verifyWrite(field, hit.value);
       field.value = check.actual;
-      S.resolvedSensitive.add(field.id);
+      if (check.ok) S.resolvedSensitive.add(field.id);
+      else await queueApproval(field, 'The saved answer could not be verified.');
       S.stats.userDecisions += 1;
       if (check.ok) S.stats.verifiedActions += 1;
 
@@ -345,17 +356,43 @@
     return handled;
   }
 
+  async function prepareDropdowns(gen) {
+    for (const field of S.fields) {
+      if (stale(gen)) return;
+      refreshValues();
+      if (!window.__screenmateAct.canAutomate(field)) continue;
+      if (!field.sensitive && field.type !== 'select' && !(field.value || '').trim() &&
+        (field.type === 'tel' || (/\b(phone|telephone|mobile)\b/i.test(field.label) &&
+          !/\b(type|device|extension|ext|country|code|sms|consent|permission)\b/i.test(field.label))) && S.profile?.phone) {
+        await applyAction({ tool: 'fillField', args: { fieldId: field.id, value: S.profile.phone } }, gen);
+      }
+      if (field.type !== 'select' || (field.value || '').trim()) continue;
+      if (!field.options?.length) {
+        const options = await window.__screenmateAct.readOptions(field);
+        if (options.length) field.options = options;
+      }
+      if (stale(gen)) return;
+      const value = window.__screenmatePrefs.profileOption(field, S.profile);
+      if (value) await applyAction({ tool: 'selectOption', args: { fieldId: field.id, value } }, gen);
+    }
+  }
+
   async function applyAction(action, gen) {
+    if (stale(gen)) return;
+    refreshValues();
     const field = S.fields.find((f) => f.id === action.args?.fieldId);
     if (!field) {
       log("warn", `Unknown field "${action.args?.fieldId}" ignored`);
       return;
     }
 
+    if ((field.value || '').trim() || !window.__screenmateAct.canAutomate(field)) return;
     if (action.tool === "requestUserApproval") {
       await queueApproval(field, action.args.reason);
-      log("lock", `${field.label} requires user input`, field.sensitiveReason);
-      markStep("approval", "active");
+      if (field.type !== 'select') {
+        log("lock", `${field.label} requires user input`, field.sensitiveReason);
+        markStep("approval", "active");
+      }
       return;
     }
 
@@ -371,12 +408,19 @@
     if (!value) return;
 
     const before = field.value || "";
-    const written = await window.__screenmateAct.applyWrite(field, value);
+    const written = await window.__screenmateAct.applyWrite(field, value, { automatic: true });
+    if (stale(gen)) return;
     if (!written.ok) {
       log("warn", `Could not write ${field.label}`, written.reason);
       return;
     }
     window.__screenmateAct.highlight(field.el);
+    const change = {
+      fieldId: field.id, label: field.label, before, after: value,
+      verified: window.__screenmateAct.verifyWrite(field, value).ok,
+      level: field.level, step: S.step,
+    };
+    S.changes.push(change);
     log(
       "write",
       `${field.label} completed`,
@@ -390,8 +434,10 @@
     let check = window.__screenmateAct.verifyWrite(field, value);
     if (!check.ok) {
       log("warn", "Verification failed — retrying once", check.summary, true);
-      await window.__screenmateAct.applyWrite(field, value);
+      if (!window.__screenmateAct.canAutomate(field)) return;
+      await window.__screenmateAct.applyWrite(field, value, { automatic: true });
       await sleep(240);
+      if (stale(gen)) return;
       check = window.__screenmateAct.verifyWrite(field, value);
     }
 
@@ -400,15 +446,7 @@
     if (field.level === "review") S.stats.reviewedSuggestions += 1;
     else S.stats.safeFields += 1;
 
-    S.changes.push({
-      fieldId: field.id,
-      label: field.label,
-      before,
-      after: value,
-      verified: check.ok,
-      level: field.level,
-      step: S.step,
-    });
+    change.verified = check.ok;
 
     log(
       check.ok ? "verify" : "warn",
@@ -420,8 +458,12 @@
   }
 
   async function runPass(gen) {
+    refreshValues();
+    const signature = window.__screenmateScan.pageSignature();
     setStatus("planning");
     const res = await api("agent", payload("act"));
+    if (stale(gen)) return "stale";
+    if (signature !== window.__screenmateScan.pageSignature()) return "changed";
     if (!res.ok) {
       failAgent(res);
       return "error";
@@ -443,8 +485,9 @@
     for (const action of plan.actions) {
       await sleep(STEP_DELAY);
       if (stale(gen)) return "stale";
+      if (signature !== window.__screenmateScan.pageSignature()) return "changed";
       if (action.tool === "researchCompany") {
-        await runResearch();
+        await runResearch(gen);
         continue;
       }
       await applyAction(action, gen);
@@ -460,7 +503,23 @@
 
   /* ---------------- validation ---------------- */
 
+  function refreshValues() {
+    const live = new Map(window.__screenmateScan.scanFields().map(field => [field.id, field]));
+    for (const field of S.fields) {
+      const current = live.get(field.id);
+      if (current?.label === field.label && current.type === field.type) {
+        field.el = current.el;
+        field.value = current.value;
+      }
+    }
+    S.approvalQueue = S.approvalQueue.filter(req => {
+      const field = S.fields.find(field => field.id === req.fieldId);
+      return field && !(field.value || '').trim() && window.__screenmateAct.canAutomate(field);
+    });
+  }
+
   function validate() {
+    refreshValues();
     const open = S.fields.filter((f) => f.required && !(f.value || "").trim());
     const sensitiveOpen = open.filter((f) => f.sensitive);
     const badUrl = S.fields.filter(
@@ -529,14 +588,27 @@
       const sig = window.__screenmateScan.pageSignature();
       if (sig !== S.observedSig) {
         setStatus("observing");
-        if (!(await observe())) return "error";
+        if (!(await observe(gen))) {
+          if (stale(gen)) return 'stale';
+          if (sig !== window.__screenmateScan.pageSignature()) continue;
+          return "error";
+        }
         S.observedSig = window.__screenmateScan.pageSignature();
         await sleep(STEP_DELAY);
         if (stale(gen)) return "stale";
 
+        // Discover real choices before the model sees this step, and fill
+        // unambiguous factual choices directly from the stored profile.
+        await prepareDropdowns(gen);
+        if (stale(gen)) return 'stale';
+        await applyPreferences(gen);
+        if (stale(gen)) return 'stale';
+
         // Plan per step: each page of a wizard asks for different things.
         setStatus("planning");
         const res = await api("agent", payload("plan"));
+        if (stale(gen)) return 'stale';
+        if (S.observedSig !== window.__screenmateScan.pageSignature()) continue;
         if (!res.ok) {
           failAgent(res);
           return "error";
@@ -551,7 +623,7 @@
 
         if (plan.researchNeeded) {
           log("research", "Research required", plan.researchRationale);
-          await runResearch();
+          await runResearch(gen);
         } else {
           log("think", "Context check", plan.researchRationale);
           markStep("research", "skipped");
@@ -574,18 +646,24 @@
       while (outcome === "done" && extra < 1) {
         extra += 1;
         const open = S.fields.filter(
-          (f) => f.required && !f.sensitive && !(f.value || "").trim(),
+          (f) => f.required && !f.sensitive && !(f.value || "").trim() &&
+            window.__screenmateAct.canAutomate(f) &&
+            !S.deferredDropdowns.has(`${S.step}:${f.id}`),
         );
         if (!open.length) break;
         outcome = await runPass(gen);
       }
+      if (outcome === 'changed') continue;
       if (outcome !== "done") return outcome;
+      if (stale(gen)) return 'stale';
 
       recordPage();
       S.report = validate();
       markStep("validate", "done");
 
       /* --- advance, or stop --- */
+      if (window.__screenmateAct.isEditing()) break;
+      if (S.report.blockers.length) break;
       const next = window.__screenmateNav.findAdvanceControl();
       if (!next) {
         S.submitHandoff = window.__screenmateNav.findSubmitControl();
@@ -598,7 +676,8 @@
 
       setStatus("advancing");
       log("nav", `Advancing to step ${S.step + 1}`, `Clicking "${next.text}"`);
-      const moved = await window.__screenmateNav.advance(next);
+      const moved = await window.__screenmateNav.advance(next, { cancelled: () => stale(gen) });
+      if (stale(gen)) return 'stale';
       if (!moved.ok) {
         log("warn", "Could not advance", moved.reason);
         break;
@@ -646,22 +725,14 @@
   }
 
   /**
-   * First run on a machine collects standing answers before touching anything.
-   * Answering them once is what lets the agent walk a whole wizard without
-   * interrupting you on every step.
+   * Standing answers are optional configuration, not a gate before each run.
    */
   async function startRun() {
+    const info = await new Promise(resolve => chrome.runtime.sendMessage({ type: 'screenmate:getProfile' }, resolve));
+    S.profile = info?.profile || S.profile || {};
     S.prefs = await window.__screenmatePrefs.load();
-    if (!window.__screenmatePrefs.isComplete(S.prefs)) {
-      S.needsPrefs = true;
-      log(
-        "prefs",
-        "Set your standing answers first",
-        "Answer these once and SCREENMATE applies them on every application.",
-      );
-      paint();
-      return;
-    }
+    S.needsPrefs = false;
+    S.autoResume = true;
     void run();
   }
 
@@ -675,7 +746,7 @@
     try {
       await pageLoop(gen);
     } finally {
-      if (!stale(gen)) S.running = false;
+      S.running = false;
     }
   }
 
@@ -723,7 +794,7 @@
       // The page signature is unchanged, so the loop resumes on this same step.
       await pageLoop(gen);
     } finally {
-      if (!stale(gen)) S.running = false;
+      S.running = false;
     }
   }
 
@@ -744,7 +815,7 @@
         await sleep(STEP_DELAY);
         if (!stale(gen)) await pageLoop(gen);
       } finally {
-        if (!stale(gen)) S.running = false;
+        S.running = false;
       }
     })();
   }
@@ -769,6 +840,7 @@
     window.__screenmateAct.highlight(field.el);
     const check = window.__screenmateAct.verifyWrite(field, text);
     field.value = check.actual;
+    window.__screenmateAct.keepField(field);
 
     if (change) {
       change.after = text;
@@ -790,10 +862,12 @@
     S.running = true;
     const gen = S.gen;
     const previous = S.status;
+    const signature = window.__screenmateScan.pageSignature();
     setStatus("acting");
     try {
       log("think", `Rewriting ${field.label}`, "Producing a different angle.");
       const res = await api("agent", payload("regenerate", { targetFieldId: fieldId }));
+      if (stale(gen) || signature !== window.__screenmateScan.pageSignature()) return;
       if (!res.ok) {
         log("warn", "Regeneration unavailable", res.reason || res.error);
         return;
@@ -802,6 +876,7 @@
       if (!value) return;
 
       const w = await window.__screenmateAct.applyWrite(field, value);
+      if (stale(gen)) return;
       if (!w.ok) {
         log("warn", `Could not write the new answer to ${field.label}`, w.reason);
         return;
@@ -818,8 +893,8 @@
       log("write", `${field.label} rewritten`, value.slice(0, 90));
       if (res.data.note) log("think", "What changed", res.data.note, true);
     } finally {
+      S.running = false;
       if (!stale(gen)) {
-        S.running = false;
         setStatus(previous === "idle" ? "reviewing" : previous);
       }
     }
@@ -827,13 +902,20 @@
 
   /** Puts one field back to whatever it held before the agent touched it. */
   async function revertOne(fieldId) {
-    const change = S.changes.find((c) => c.fieldId === fieldId);
     const field = S.fields.find((f) => f.id === fieldId);
+    const change = S.changes.find((c) => c.fieldId === fieldId && c.label === field?.label && c.step === S.step);
     if (!change || !field) return;
 
-    await window.__screenmateAct.applyWrite(field, change.before || "");
-    field.value = change.before || "";
-    S.changes = S.changes.filter((c) => c.fieldId !== fieldId);
+    const restored = await window.__screenmateAct.applyWrite(field, change.before || '');
+    const actual = window.__screenmateScan.currentValue(field.el);
+    if (!restored.ok || actual !== (change.before || '')) {
+      log('warn', `${change.label} could not be reverted`, restored.reason || 'The form did not restore the original value.');
+      paint();
+      return;
+    }
+    field.value = actual;
+    window.__screenmateAct.keepField(field);
+    S.changes = S.changes.filter((c) => c !== change);
     S.resolvedSensitive.add(fieldId);
     log("warn", `${change.label} reverted`, "Put back to what it was.");
     S.report = validate();
@@ -841,24 +923,31 @@
   }
 
   async function revertAll() {
+    const reverted = new Set();
     for (const c of S.changes) {
-      const field = S.fields.find((f) => f.id === c.fieldId);
+      const field = S.fields.find((f) => f.id === c.fieldId && f.label === c.label && c.step === S.step);
       if (field) {
-        await window.__screenmateAct.applyWrite(field, c.before || "");
-        field.value = c.before || "";
+        const restored = await window.__screenmateAct.applyWrite(field, c.before || '');
+        const actual = window.__screenmateScan.currentValue(field.el);
+        if (restored.ok && actual === (c.before || '')) {
+          field.value = actual;
+          window.__screenmateAct.keepField(field);
+          reverted.add(c);
+        } else log('warn', `${c.label} could not be reverted`, restored.reason || 'Restore it directly on the form.');
       }
     }
     log(
       "warn",
-      "Agent changes reverted on this step",
+      `${reverted.size} change${reverted.size === 1 ? '' : 's'} reverted on this step`,
       "Earlier steps are left as they are — navigate back to change those.",
     );
-    S.changes = S.changes.filter((c) => c.step !== S.step);
+    S.changes = S.changes.filter((c) => !reverted.has(c));
     S.report = validate();
-    setStatus("complete");
+    setStatus(S.changes.length ? 'reviewing' : 'complete');
   }
 
   function acceptAll() {
+    S.autoResume = false;
     log("success", "All changes accepted", `${S.changes.length} fields confirmed.`);
     S.report = validate();
     markStep("review", "done");
@@ -866,6 +955,7 @@
   }
 
   function reset() {
+    S.autoResume = false;
     S.gen += 1;
     S.running = false;
     Object.assign(S, {
@@ -885,6 +975,7 @@
       submitHandoff: null,
       needsPrefs: false,
       resolvedSensitive: new Set(),
+      deferredDropdowns: new Set(),
       stats: EMPTY_STATS(),
     });
     void observe().then(() => {
@@ -938,6 +1029,8 @@
           }
         },
         onClose: () => {
+          S.autoResume = false;
+          S.gen++;
           S.panel.remove();
           S.panel = null;
         },
@@ -966,7 +1059,7 @@
    */
   function looksLikeApplication() {
     const fields = window.__screenmateScan.scanFields();
-    if (fields.length < 4) return false;
+    if (fields.length < 2) return false;
     const text = fields.map((f) => f.label.toLowerCase()).join(" ");
     const hasIdentity = /name|email/.test(text);
     if (!hasIdentity) return false;
@@ -976,7 +1069,8 @@
     const jobWords =
       /resume|cover|why|experience|portfolio|linkedin|degree|school|salary|sponsor|employer|position/;
     const hasAdvance = Boolean(window.__screenmateNav?.findAdvanceControl());
-    return fields.length >= 6 || jobWords.test(text) || hasAdvance;
+    const applicationContext = /apply|application|careers|jobs/.test(`${location.pathname} ${document.title}`.toLowerCase());
+    return jobWords.test(text) || (fields.length >= 4 && hasAdvance) || (applicationContext && hasAdvance);
   }
 
   /* ---------------- frame election ---------------- */
@@ -990,7 +1084,8 @@
   const ELECTION = "screenmate:claim";
   const isTop = window === window.top;
   let electionTimer = null;
-  const claims = [];
+  const claims = new Map();
+  let electionWinner = null;
 
   function claimFrame(count) {
     const msg = { __screenmate: ELECTION, count, href: location.href };
@@ -1006,11 +1101,13 @@
     window.addEventListener("message", (ev) => {
       const d = ev.data;
       if (!d || d.__screenmate !== ELECTION) return;
-      claims.push({ count: d.count, source: ev.source });
+      if (electionWinner || !ev.source || !Number.isFinite(d.count) || d.count < 2) return;
+      claims.set(ev.source, { count: d.count, source: ev.source });
       clearTimeout(electionTimer);
       // Wait a beat for slower frames before deciding.
       electionTimer = setTimeout(() => {
-        const winner = claims.reduce((a, b) => (b.count > a.count ? b : a));
+        const winner = [...claims.values()].reduce((a, b) => (b.count > a.count ? b : a));
+        electionWinner = winner.source;
         if (winner.source === window) {
           void mount({ collapsed: true });
         } else {
@@ -1056,7 +1153,68 @@
 
   window.__screenmateMount = mount;
 
-  // Forms often render after load; give SPAs a couple of chances.
+  // Real user events invalidate outstanding plans before the next write. Wait
+  // until interaction settles and the previous loop exits, then classify anew.
+  let resumeTimer = null;
+  function adaptToPage() {
+    if (!S.panel || !S.autoResume) return;
+    S.gen++;
+    S.observedSig = null;
+    S.report = null;
+    S.submitHandoff = null;
+    setStatus('adapting');
+    clearTimeout(resumeTimer);
+    const resume = async () => {
+      if (!S.autoResume || !S.panel) return;
+      if (S.running) { resumeTimer = setTimeout(resume, 200); return; }
+      if (!window.__screenmateScan.scanFields().length) return;
+      S.resolvedSensitive.clear();
+      S.deferredDropdowns.clear();
+      refreshValues();
+      await run();
+    };
+    resumeTimer = setTimeout(resume, 900);
+  }
+  window.__screenmateAct.onInteraction(({ field, type }) => {
+    if (field && (type === 'input' || type === 'change')) {
+      const change = S.changes.find(change => change.step === S.step && change.fieldId === field.id && change.label === field.label);
+      if (change) {
+        change.after = window.__screenmateScan.currentValue(field.el);
+        change.edited = true;
+        change.fromPreference = false;
+        change.verified = change.after ? window.__screenmateAct.verifyWrite(field, change.after).ok : !field.required;
+      }
+    }
+    adaptToPage();
+  });
+
+  // SPA application dialogs can open long after page load. Debounce scans and
+  // ignore mutations from our own panel so detection does not feed itself.
+  let detectionTimer = null;
+  let lastDetectedSignature = window.__screenmateScan.pageSignature();
+  const detectionObserver = new MutationObserver((mutations) => {
+    if (detectionTimer || !mutations.some((m) =>
+      !m.target.closest?.('#screenmate-root') &&
+      !m.target.closest?.('#screenmate-page-style'))) return;
+    detectionTimer = setTimeout(() => {
+      detectionTimer = null;
+      const signature = window.__screenmateScan.pageSignature();
+      const changed = signature !== lastDetectedSignature;
+      lastDetectedSignature = signature;
+      if (S.panel) {
+        if (S.autoResume && changed && S.observedSig !== signature && S.status !== 'advancing') adaptToPage();
+        else if (!S.running) {
+          const before = S.fields.map(field => field.value).join('|');
+          refreshValues();
+          if (before !== S.fields.map(field => field.value).join('|')) paint();
+        }
+      } else autoMount();
+    }, 500);
+  });
+  detectionObserver.observe(document.documentElement, {
+    childList: true, subtree: true, attributes: true,
+    attributeFilter: ['hidden', 'style', 'class', 'aria-hidden', 'aria-label', 'aria-labelledby', 'disabled', 'required'],
+  });
   autoMount();
   setTimeout(autoMount, 1500);
   setTimeout(autoMount, 4000);

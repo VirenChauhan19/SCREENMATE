@@ -1,0 +1,17 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><title>Careers application</title>
+<h1>Careers</h1><p>Application dialog loads later.</p><div id="application"></div>
+<script>
+// Isolate orchestration from backend/model calls. The real main.js handles
+// detection; these stubs expose whether it mounts its collapsed panel.
+window.chrome={runtime:{onMessage:{addListener(){}},sendMessage(message,callback){callback({profile:{}})}}};
+window.__screenmatePrefs={load:async()=>({}),QUESTIONS:[]};
+window.__screenmatePanel=class {
+  constructor(){this.host=document.createElement('div');this.host.id='screenmate-root';this.host.textContent='Screenmate detected the application';document.body.append(this.host)}
+  render(){} toggle(){} remove(){this.host.remove()}
+};
+</script>
+<script src="/extension/content/scan.js"></script><script src="/extension/content/act.js"></script><script src="/extension/content/nav.js"></script><script src="/extension/content/main.js"></script>
+<script>
+// Beyond the previous four-second detection window, with just two fields.
+setTimeout(()=>document.getElementById('application').innerHTML='<form><label>Full name<input id="dynamic-name"></label><label>Email<input id="dynamic-email" type="email"></label><button type="button">Next</button></form>',4800);
+</script></html>

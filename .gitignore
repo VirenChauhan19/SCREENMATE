@@ -13,3 +13,4 @@ dist
 extension/config.json
 demo/frames
 demo/screenmate-raw.mp4
+.env*

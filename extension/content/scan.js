@@ -39,6 +39,9 @@
   }
 
   function isVisible(el) {
+    if (el.closest?.('[hidden], [inert], [aria-hidden="true"], [aria-disabled="true"]')) return false;
+    const host = el.getRootNode()?.host;
+    if (host && !isVisible(host)) return false;
     if (el.disabled || el.readOnly) return false;
     if (el.getAttribute("aria-hidden") === "true") return false;
     if (el.getAttribute("aria-disabled") === "true") return false;
@@ -50,6 +53,23 @@
   }
 
   const cleanText = (s) => (s || "").replace(/\s+/g, " ").trim();
+
+  // IDs and radio names are scoped to a tree/form, not the entire page.
+  function referencedElement(el, id) {
+    return el.getRootNode()?.getElementById?.(id) || el.ownerDocument.getElementById(id);
+  }
+
+  function radioMembers(el) {
+    if (!el.name) return [el];
+    return Array.from(el.getRootNode().querySelectorAll('input[type=radio]'))
+      .filter((r) => r.name === el.name && r.form === el.form);
+  }
+
+  function isPlaceholderOption(option) {
+    const text = cleanText(option?.textContent);
+    return !option || !text || option.disabled || option.parentElement?.disabled ||
+      /^(select(?: one| an? .+)?|choose(?: one| an? .+)?|please select.*|--+)\s*[.…:]*$/i.test(text);
+  }
 
   /** Workday and friends hang stable hooks off data-automation-id. */
   const automationId = (el) =>
@@ -123,7 +143,7 @@
     if (labelledBy) {
       const text = labelledBy
         .split(/\s+/)
-        .map((id) => labelText(document.getElementById(id)))
+        .map((id) => labelText(referencedElement(el, id)))
         .filter(Boolean)
         .join(" ");
       if (text) return text;
@@ -132,7 +152,7 @@
     if (el.id) {
       const escaped =
         window.CSS && CSS.escape ? CSS.escape(el.id) : el.id.replace(/"/g, '\\"');
-      const text = labelText(document.querySelector(`label[for="${escaped}"]`));
+      const text = labelText(el.getRootNode().querySelector(`label[for="${escaped}"]`));
       if (text) return text;
     }
 
@@ -180,7 +200,7 @@
     if (labelledBy) {
       const text = labelledBy
         .split(/\s+/)
-        .map((id) => labelText(document.getElementById(id)))
+        .map((id) => labelText(referencedElement(el, id)))
         .filter(Boolean)
         .join(" ");
       if (text) return text;
@@ -208,6 +228,9 @@
 
   function isRequired(el, label) {
     if (el.required || el.getAttribute("aria-required") === "true") return true;
+    const labelled = (el.getAttribute('aria-labelledby') || '').split(/\s+/)
+      .map((id) => referencedElement(el, id));
+    if (Array.from(el.labels || []).concat(labelled).some((n) => /[*✱✽]/.test(n?.textContent || ''))) return true;
     if (/\*\s*$/.test(label)) return true;
     const group = el.closest(
       "[data-automation-id*=formField], [class*=field], [class*=form-group], [class*=question]",
@@ -246,9 +269,9 @@
 
   function stableId(el, index) {
     const raw =
-      automationId(el) ||
-      el.getAttribute("name") ||
       el.id ||
+      el.getAttribute("name") ||
+      automationId(el) ||
       `${el.tagName.toLowerCase()}_${index}`;
     return raw.replace(/[^\w.:\-[\]]/g, "_").slice(0, 120);
   }
@@ -260,17 +283,14 @@
 
     if (tag === "select") {
       return Array.from(el.options)
+        .filter((o) => !isPlaceholderOption(o))
         .map((o) => cleanText(o.textContent))
-        .filter((t) => t && !/^(select|choose|--)/i.test(t))
         .slice(0, 60);
     }
 
     if (el.type === "radio" && el.name) {
-      return Array.from(
-        document.querySelectorAll(
-          `input[type=radio][name="${CSS.escape(el.name)}"]`,
-        ),
-      )
+      return radioMembers(el)
+        .filter((r) => !r.disabled)
         .map((r) => labelFor(r))
         .filter(Boolean)
         .slice(0, 60);
@@ -294,7 +314,7 @@
       const owned =
         el.getAttribute("aria-controls") || el.getAttribute("aria-owns") || "";
       const popup = owned
-        ? document.getElementById(owned.split(/\s+/)[0])
+        ? referencedElement(el, owned.split(/\s+/)[0])
         : el.querySelector("[role=listbox]");
       if (popup) {
         return Array.from(popup.querySelectorAll("[role=option]"))
@@ -316,15 +336,13 @@
     const role = (el.getAttribute("role") || "").toLowerCase();
     const t = (el.type || "").toLowerCase();
 
-    if (t === "checkbox") return el.checked ? "Checked" : "Unchecked";
+    if (t === "checkbox") return el.checked ? "Checked" : (isRequired(el, labelFor(el)) ? "" : "Unchecked");
     if (role === "checkbox" || role === "switch") {
-      return el.getAttribute("aria-checked") === "true" ? "Checked" : "Unchecked";
+      return el.getAttribute("aria-checked") === "true" ? "Checked" : (isRequired(el, labelFor(el)) ? "" : "Unchecked");
     }
     if (t === "radio") {
       if (!el.name) return el.checked ? labelFor(el) : "";
-      const checked = document.querySelector(
-        `input[type=radio][name="${CSS.escape(el.name)}"]:checked`,
-      );
+      const checked = radioMembers(el).find((r) => r.checked);
       return checked ? labelFor(checked) : "";
     }
     if (role === "radiogroup") {
@@ -334,8 +352,8 @@
         : "";
     }
     if (tag === "select") {
-      const text = cleanText(el.selectedOptions?.[0]?.textContent);
-      return /^(select|choose|--)/i.test(text || "") ? "" : text || "";
+      const selected = el.selectedOptions?.[0];
+      return isPlaceholderOption(selected) ? "" : cleanText(selected.textContent);
     }
     if (role === "combobox" || role === "listbox") {
       // Workday renders the chosen value as the button's own text.
@@ -381,6 +399,10 @@
       const isInput = el.tagName.toLowerCase() === "input";
       if (isInput && SKIP_TYPES.has((el.type || "text").toLowerCase())) continue;
       if (!isVisible(el)) continue;
+      // The panel and popup menus are UI, not application questions.
+      if (el.getRootNode()?.host?.id === 'screenmate-root') continue;
+      if (el.getAttribute('role') === 'listbox' && deepQueryAll('[role=combobox]').some((c) =>
+        (c.getAttribute('aria-controls') || c.getAttribute('aria-owns') || '').split(/\s+/).some((id) => referencedElement(c, id) === el))) continue;
 
       const identity = `${el.name || ""} ${el.id || ""} ${automationId(el)} ${
         el.getAttribute("autocomplete") || ""
@@ -392,7 +414,7 @@
         continue;
       }
       if (isInput && el.type === "radio") {
-        const key = el.name || el.id;
+        const key = radioMembers(el)[0];
         if (seenRadioGroups.has(key)) continue;
         seenRadioGroups.add(key);
       }
@@ -466,15 +488,29 @@
   }
 
   function scanFields() {
-    return collectElements().map((el, i) => {
+    const elements = collectElements();
+    const bases = elements.map(stableId);
+    const counts = new Map();
+    bases.forEach((id) => counts.set(id, (counts.get(id) || 0) + 1));
+    const occurrences = new Map();
+    const reserved = new Set(bases);
+    return elements.map((el, i) => {
+      const base = bases[i];
+      const occurrence = (occurrences.get(base) || 0) + 1;
+      occurrences.set(base, occurrence);
+      let id = base;
+      if (counts.get(base) > 1) {
+        id = `${base}__${occurrence}`;
+        while (reserved.has(id)) id += '_';
+        reserved.add(id);
+      }
       const type = (el.type || "").toLowerCase();
       const grouped =
         type === "radio" ||
-        type === "checkbox" ||
         (el.getAttribute("role") || "").toLowerCase() === "radiogroup";
       const label = grouped ? groupLabelFor(el) : labelFor(el);
       return {
-        id: stableId(el, i),
+        id,
         label: label.replace(/\s*\*\s*$/, "").slice(0, 300),
         type: fieldType(el),
         required: isRequired(el, label),
@@ -487,8 +523,8 @@
 
   /** A cheap fingerprint used to tell "the page changed" from "it didn't". */
   function pageSignature() {
-    const ids = collectElements()
-      .map((el, i) => stableId(el, i))
+    const ids = scanFields()
+      .map((f) => `${f.id}:${f.label}:${f.type}`)
       .sort()
       .join("|");
     return `${location.href}::${currentStepLabel()}::${ids}`;
@@ -504,5 +540,8 @@
     deepQueryAll,
     cleanText,
     isVisible,
+    referencedElement,
+    radioMembers,
+    isPlaceholderOption,
   };
 })();

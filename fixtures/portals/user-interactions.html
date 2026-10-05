@@ -1,0 +1,38 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><title>Application interaction test</title>
+<h1>Application interaction test</h1><p>Synthetic data; no external requests.</p>
+<form id="application"><label>Full name<input id="name" required></label>
+<label>Email<input id="email" value="applicant@example.test"></label>
+<label>Cover letter notes<textarea id="notes" required></textarea></label></form>
+<button id="switch" type="button">Switch application section</button>
+<button id="outside" type="button">Outside form</button>
+<button id="release" type="button">Release first agent response</button>
+<p id="status">Idle</p><p id="pending">No request</p><p id="prompt">No prompt</p><p id="cursor">No focus</p>
+<pre id="answers"></pre>
+<script>
+let holdFirst = true, firstReply = null;
+document.getElementById('release').onclick=()=>{firstReply?.();firstReply=null;};
+document.addEventListener('focusin', event => document.getElementById('cursor').textContent = 'Focus: '+event.target.id);
+document.getElementById('switch').onclick=()=>{
+  document.getElementById('application').innerHTML='<label>Preferred name<input id="name" required></label><label>Email<input id="email" value="applicant@example.test"></label><label>New section notes<textarea id="notes" required></textarea></label>';
+};
+window.chrome={storage:{local:{get(key,callback){callback({preferences:{}})}}},runtime:{onMessage:{addListener(){}},sendMessage(message,callback){
+  if(message.type==='screenmate:getProfile'){callback({profile:{name:'Test Applicant'}});return}
+  if(message.route==='classify'){setTimeout(()=>callback({ok:true,data:{fields:message.body.fields.map(field=>({...field,level:'safe',sensitive:false}))}}),100);return}
+  if(message.body?.phase==='plan'){callback({ok:true,data:{goal:'Fill application',steps:[],observation:'Test application',researchNeeded:false}});return}
+  if(message.body?.phase==='act'){
+    const fields=message.body.applicationState.fields;
+    document.getElementById('pending').textContent='Waiting for '+fields[0].label;
+    const reply=()=>callback({ok:true,data:{decisionSummary:'Fill test data',actions:fields.filter(field=>!field.value).map(field=>({tool:'fillField',args:{fieldId:field.id,value:field.label==='Full name'?'Test Applicant':field.label==='Preferred name'?'New section applicant':field.label==='Cover letter notes'?'Old section notes':'New section notes'}}))}});
+    if(holdFirst){holdFirst=false;firstReply=reply;}else setTimeout(reply,600);
+    return;
+  }
+  callback({ok:false,error:'Unexpected test request'});
+}}};
+window.__screenmatePanel=class {
+  constructor(handlers){this.host=document.createElement('div');this.host.id='screenmate-root';const run=document.createElement('button');run.textContent='Run SCREENMATE';run.onclick=handlers.onRun;this.host.append(run);document.body.append(this.host)}
+  render(state){document.getElementById('status').textContent=state.status;document.getElementById('prompt').textContent=state.approval?'PROMPT':'No prompt';document.getElementById('answers').textContent=Array.from(document.querySelectorAll('#application input,#application textarea')).map(field=>field.id+': '+field.value).join('\n')}
+  toggle(){}remove(){this.host.remove()}
+};
+</script>
+<script src="/extension/content/scan.js"></script><script src="/extension/content/act.js"></script><script src="/extension/content/nav.js"></script><script src="/extension/content/prefs.js"></script><script src="/extension/content/main.js"></script>
+</html>

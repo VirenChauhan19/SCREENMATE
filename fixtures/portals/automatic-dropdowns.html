@@ -1,0 +1,26 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><title>Apply: automatic dropdowns</title>
+<h1>Automatic dropdown application</h1><p>Tests use synthetic profile data and a stub backend.</p>
+<form><label>Name<input id="name" value="Test Applicant"></label>
+<label>Email<input id="email" type="email" value="applicant@example.test"></label>
+<label>Phone number<input id="phone" type="tel"></label>
+<label>Phone device type<select id="phoneType"><option selected disabled>Select one</option><option>Home</option><option>Mobile</option><option>Work</option></select></label>
+<label>Highest degree<select id="degree" required><option selected disabled>Select one</option><option>BFA Game Design</option><option>MS Computer Science</option></select></label>
+<label>Will you require sponsorship?<select id="sponsorship" required><option selected disabled>Select one</option><option>No, I do not require sponsorship</option><option>Yes, I require sponsorship</option></select></label>
+<label>Are you willing to relocate?<select id="relocation" required><option selected disabled>Select one</option><option>Yes</option><option>No</option></select></label>
+<button type="button">Submit application</button></form><div id="test-status">Idle</div><div id="prompts"></div>
+<script>
+window.chrome={storage:{local:{get(key,callback){callback({preferences:{sponsorship:'No'}})}}},runtime:{onMessage:{addListener(){}},sendMessage(message,callback){
+  if(message.type==='screenmate:getProfile'){callback({profile:{name:'Test Applicant',phone:'+1 202-555-0123',degree:'BFA Game Design'}});return}
+  if(message.route==='classify'){callback({ok:true,data:{fields:message.body.fields.map(field=>({...field,level:/sponsorship|relocat/.test(field.label)?'sensitive':'safe',sensitive:/sponsorship|relocat/.test(field.label),topic:field.id==='sponsorship'?'sponsorship':field.id==='relocation'?'relocation':null}))}});return}
+  if(message.route==='agent'&&message.body.phase==='plan'){callback({ok:true,data:{goal:'Fill this application',steps:[],observation:'Application found',researchNeeded:false,researchRationale:'Profile is sufficient'}});return}
+  if(message.route==='agent'){callback({ok:true,data:{decisionSummary:'Review unanswered relocation',actions:[{tool:'requestUserApproval',args:{fieldId:'relocation',reason:'No saved relocation answer'}}]}});return}
+  callback({ok:false,error:'Unexpected test API request'});
+}}};
+window.__screenmatePanel=class {
+  constructor(handlers){this.host=document.createElement('div');this.host.id='screenmate-root';const run=document.createElement('button');run.textContent='Run SCREENMATE';run.onclick=handlers.onRun;this.host.append(run);document.body.append(this.host)}
+  render(state){document.getElementById('test-status').textContent=state.status;document.getElementById('prompts').textContent=state.approval||state.needsPrefs?'PROMPT':'NO PROMPT'}
+  toggle(){}remove(){this.host.remove()}
+};
+</script>
+<script src="/extension/content/scan.js"></script><script src="/extension/content/act.js"></script><script src="/extension/content/nav.js"></script><script src="/extension/content/prefs.js"></script><script src="/extension/content/main.js"></script>
+</html>

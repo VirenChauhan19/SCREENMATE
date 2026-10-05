@@ -1,0 +1,22 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><title>Apply: compatibility edge cases</title>
+<style>body{font:14px system-ui;margin:20px}label{display:block;margin:8px 0}input,select,button{padding:7px} [role=listbox]{border:1px solid #ccc;padding:6px}</style>
+<h1>Application edge cases</h1>
+<form id="one"><label>Full name *<input id="name" required></label>
+<fieldset><legend>Sponsorship</legend><label><input type="radio" name="sponsorship" value="yes">Yes</label><label><input type="radio" name="sponsorship" value="no">No</label></fieldset>
+<label>I agree to the privacy policy<input id="consent" type="checkbox" required></label>
+<label>Education<select id="education"><option disabled selected>Select one</option><option disabled>Unavailable</option><option>Select Engineering College</option><option>SCAD</option></select></label>
+<label>School<input id="school" role="combobox" aria-autocomplete="list" aria-controls="school-menu" aria-expanded="false"></label>
+<label>Repeat A<input name="repeated"></label><label>Repeat B<input name="repeated"></label><label>Reserved suffix<input name="repeated__1"></label>
+<label>Notes<input id="notes"></label><div aria-hidden="true"><label>Hidden salary<input id="hidden-salary"></label></div>
+<button id="next" type="button">Next</button><button id="submit" type="button">Apply and continue</button></form>
+<form id="two"><fieldset><legend>Separate sponsorship</legend><label><input type="radio" name="sponsorship">Yes</label><label><input type="radio" name="sponsorship">No</label></fieldset></form>
+<div id="shadow-host"></div>
+<script>
+const root=document.getElementById('shadow-host').attachShadow({mode:'open'});
+root.innerHTML='<style>label{display:block;margin:8px}input,button{padding:7px}</style><label id="shadow-label">Shadow email *</label><input id="email" aria-labelledby="shadow-label" type="email"><label for="shadow-select">Shadow degree</label><button type="button" id="shadow-select" role="combobox" aria-controls="shadow-menu" aria-expanded="false">Select one</button>';
+const shadowSelect=root.getElementById('shadow-select');
+shadowSelect.onclick=()=>{const old=root.getElementById('shadow-menu');if(old){old.remove();shadowSelect.setAttribute('aria-expanded','false');return}const menu=document.createElement('div');menu.id='shadow-menu';menu.setAttribute('role','listbox');menu.innerHTML='<button type="button" role="option">BFA Game Design</button>';root.append(menu);shadowSelect.setAttribute('aria-expanded','true');menu.firstChild.onclick=()=>{shadowSelect.textContent='BFA Game Design';menu.remove();shadowSelect.setAttribute('aria-expanded','false')}};
+const school=document.getElementById('school');let timer;
+school.addEventListener('input',()=>{clearTimeout(timer);document.getElementById('school-menu')?.remove();school.setAttribute('aria-expanded','false');if(!school.value)return;const menu=document.createElement('div');menu.id='school-menu';menu.setAttribute('role','listbox');document.body.append(menu);school.setAttribute('aria-expanded','true');timer=setTimeout(()=>{menu.innerHTML='<div role="option" aria-disabled="true">Disabled College</div><div role="option">SCAD</div><div role="option">SCAD Extension</div>';menu.querySelectorAll('[role=option]').forEach(o=>o.onclick=()=>{school.value=o.textContent;school.dataset.selected=o.textContent;menu.remove();school.setAttribute('aria-expanded','false')})},650)});
+school.addEventListener('keydown',e=>{if(e.key==='Escape'){clearTimeout(timer);document.getElementById('school-menu')?.remove();school.setAttribute('aria-expanded','false')}});
+</script></html>

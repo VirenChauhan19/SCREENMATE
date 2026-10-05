@@ -374,11 +374,13 @@
                   "acting",
                   "verifying",
                   "advancing",
+                  "adapting",
                 ].includes(status)
               ? "run"
               : "";
 
       const STATUS_TEXT = {
+        adapting: "Adapting to your changes",
         idle: "Standing by",
         observing: "Observing",
         researching: "Researching",
@@ -466,8 +468,8 @@
            <div class="lbl">Your standing answers</div>
            <div class="muted" style="line-height:1.55;margin-bottom:12px">
              Answer these once. SCREENMATE applies them on every application
-             instead of stopping to ask each time. Anything you leave as
-             <em>Ask each time</em> still pauses the run.
+             automatically. Dropdowns without a matching saved answer are left
+             for review while SCREENMATE continues.
            </div>
            ${prefQuestions
              .map((q) => {
@@ -490,7 +492,7 @@
                  }
                  <button class="pask${cur === "__ask__" ? " on" : ""}"
                    data-act="pref" data-topic="${esc(q.topic)}" data-val="__ask__">
-                   Ask each time</button>
+                   Leave for review</button>
                </div>`;
              })
              .join("")}
@@ -502,6 +504,8 @@
   <div class="sec">
     <div class="lbl">Live status</div>
     <div class="status"><span class="dot ${tone}"></span>${esc(STATUS_TEXT[status] || status)}</div>
+    ${!needsPrefs && !['acting','planning','observing','verifying','advancing','adapting'].includes(status)
+      ? '<button class="btn ghost" data-act="editPrefs">Saved answers</button>' : ''}
     ${banner ? `<div class="muted t-warn" style="margin-top:9px;line-height:1.5">${esc(banner)}</div>` : ""}
     ${
       status === "idle"
@@ -747,7 +751,7 @@
             return this.handlers.onPrefsDone?.(free);
           }
           this.handlers[
-            { run: "onRun", rescan: "onRescan", acceptAll: "onAcceptAll", revertAll: "onRevertAll" }[act]
+            { run: "onRun", rescan: "onRescan", acceptAll: "onAcceptAll", revertAll: "onRevertAll", editPrefs: "onEditPrefs" }[act]
           ]?.();
         });
       });

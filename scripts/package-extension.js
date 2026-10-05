@@ -73,6 +73,12 @@ if (backendUrl) {
     console.log("directly; do not post it anywhere public.");
   }
 } else {
+  const bundled = files['config.json'] && JSON.parse(Buffer.from(files['config.json']).toString('utf8'));
+  if (bundled?.backendUrl && !/localhost|127\.0\.0\.1/.test(bundled.backendUrl)) {
+    console.log(`Using extension/config.json backend: ${bundled.backendUrl}`);
+    console.log(bundled.apiKey ? 'Access key included from existing configuration.' : 'No access key in existing configuration.');
+    process.exit(0);
+  }
   console.log("");
   console.log("No backend bundled, so this defaults to the recipient's localhost.");
   console.log("To package for someone else's laptop:");

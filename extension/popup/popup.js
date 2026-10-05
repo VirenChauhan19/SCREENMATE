@@ -1,5 +1,5 @@
 const FIELDS = [
-  "name", "email", "location", "university", "degree",
+  "name", "email", "phone", "location", "university", "degree",
   "minor", "graduationDate", "portfolio", "linkedin",
 ];
 
@@ -68,7 +68,9 @@ async function health(base, apiKey) {
 
 /** One writer for the profile, used by Save and by CV Apply. */
 async function saveProfile(extra = {}) {
-  const profile = {};
+  // Preserve imported facts that do not have an editor in this popup.
+  const { profile: stored = {} } = await chrome.storage.local.get('profile');
+  const profile = { ...stored };
   for (const f of FIELDS) profile[f] = document.getElementById(f).value.trim();
   profile.skills = document
     .getElementById("skills")
@@ -162,7 +164,7 @@ document.getElementById("open").addEventListener("click", async () => {
 /* ---------------- CV import ---------------- */
 
 const CV_KEYS = [
-  ["name", "Name"], ["email", "Email"], ["location", "Location"],
+  ["name", "Name"], ["email", "Email"], ["phone", "Phone"], ["location", "Location"],
   ["university", "University"], ["degree", "Degree"], ["minor", "Minor"],
   ["graduationDate", "Graduation"], ["portfolio", "Portfolio"],
   ["linkedin", "LinkedIn"], ["skills", "Skills"],

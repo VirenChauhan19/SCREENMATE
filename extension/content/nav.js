@@ -17,7 +17,7 @@
    * of the advance list, so a button reading "Submit and continue" is refused.
    */
   const SUBMIT_RE =
-    /\b(submit|apply now|send application|finish|complete application|confirm and|agree and|i agree|accept and|sign and|pay|purchase|delete|withdraw)\b/i;
+    /\b(submit|apply|send application|finish|complete application|confirm and|agree and|i agree|accept and|sign and|pay|purchase|delete|withdraw)\b/i;
 
   /** Controls that move to the next step of a wizard. */
   const ADVANCE_RE =
@@ -101,7 +101,8 @@
    * Resolves with the outcome rather than throwing, so the loop can report and
    * stop cleanly when a wizard refuses to advance (usually a validation error).
    */
-  async function advance(control, { timeout = 15000 } = {}) {
+  async function advance(control, { timeout = 15000, cancelled = () => false } = {}) {
+    if (cancelled()) return { ok: false, reason: 'You moved on; rescanning' };
     if (!control?.el?.isConnected) {
       return { ok: false, reason: "Advance control disappeared" };
     }
@@ -109,10 +110,18 @@
       // Belt and braces: findAdvanceControl already excluded these.
       return { ok: false, reason: "Refusing to click a submit control" };
     }
+    if (!isVisible(control.el) || !ADVANCE_RE.test(controlText(control.el)) || RETREAT_RE.test(controlText(control.el))) {
+      return { ok: false, reason: 'Advance control is no longer available' };
+    }
 
     const before = window.__screenmateScan.pageSignature();
     control.el.scrollIntoView?.({ block: "center", behavior: "smooth" });
     await new Promise((r) => setTimeout(r, 250));
+    if (cancelled()) return { ok: false, reason: 'You moved on; rescanning' };
+    if (!control.el.isConnected || !isVisible(control.el) || isSubmitControl(control.el) ||
+      !ADVANCE_RE.test(controlText(control.el)) || RETREAT_RE.test(controlText(control.el))) {
+      return { ok: false, reason: 'Advance control changed before the click' };
+    }
     control.el.click();
 
     const started = Date.now();
@@ -121,13 +130,14 @@
 
     while (Date.now() - started < timeout) {
       await new Promise((r) => setTimeout(r, 350));
+      if (cancelled()) return { ok: false, reason: 'You moved on; rescanning' };
       const now = window.__screenmateScan.pageSignature();
 
       if (now !== before) {
         // Changed — now wait for it to stop changing before we scan.
         settledFor = now === last ? settledFor + 350 : 0;
         last = now;
-        if (settledFor >= 700) return { ok: true };
+        if (settledFor >= 700 && window.__screenmateScan.scanFields().length > 0) return { ok: true };
       }
       last = now;
     }

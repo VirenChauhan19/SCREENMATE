@@ -7,7 +7,7 @@
  *
  * The safety property is unchanged and worth being precise about: the agent
  * still never *decides* a sensitive question. It fills in a decision you already
- * made, and says so. Anything you left as "Ask me each time" still stops the run.
+ * made, and says so. Unanswered dropdowns stay for final review.
  */
 
 (() => {
@@ -110,31 +110,22 @@
     const exact = options.find((o) => norm(o) === a);
     if (exact) return exact;
 
-    const prefix = options.find((o) => norm(o).startsWith(a) || a.startsWith(norm(o)));
-    if (prefix) return prefix;
-
+    const unique = candidates => candidates.length === 1 ? candidates[0] : null;
     if (DECLINE.test(answer)) {
-      const decline = options.find((o) => DECLINE.test(o));
-      if (decline) return decline;
+      return unique(options.filter((o) => DECLINE.test(o)));
     }
-    if (YES.test(answer)) {
-      const yes = options.find((o) => YES.test(o) && !NO.test(o));
-      if (yes) return yes;
+    if (YES.test(answer) && !NO.test(answer)) {
+      return unique(options.filter((o) => YES.test(o) && !NO.test(o)));
     }
     if (NO.test(answer)) {
-      const no = options.find((o) => NO.test(o));
-      if (no) return no;
+      return unique(options.filter((o) => NO.test(o)));
     }
-
-    const contains = options.find(
-      (o) => norm(o).includes(a) || (a.length > 3 && a.includes(norm(o))),
-    );
-    return contains || null;
+    return null;
   }
 
   /**
    * Resolves a field to a concrete value from stored preferences.
-   * Returns null when there is no standing answer — the run then stops and asks.
+   * Returns null when there is no saved answer; dropdowns stay for final review.
    */
   function resolve(field, prefs) {
     if (!field?.topic) return null;
@@ -145,6 +136,49 @@
     const value = needsOption ? matchOption(stored, field.options) : stored;
     if (!value) return null;
     return { value, topic: field.topic, stored };
+  }
+
+  /** An unambiguous profile value or explicit degree level for a factual dropdown. */
+  function profileOption(field, profile) {
+    if (field?.type !== 'select' || field.sensitive || !field.options?.length) return null;
+    const label = field.label || '';
+    // The user requested Mobile as the default for their phone's device type.
+    // Restrict this to phone questions; unrelated device questions need facts.
+    if (/\b(phone|telephone|contact|mobile)\b/i.test(label) && /\b(type|device|kind)\b/i.test(label)) {
+      const choices = field.options.filter(option => /^(mobile(?: phone)?|cell(?:ular)?(?: phone)?)$/i.test(option.trim()));
+      return choices.length === 1 ? choices[0] : null;
+    }
+    if (/^device\s+type\b/i.test(label) && field.options.some(option => /^(home|work|landline)(?: phone)?$/i.test(option.trim()))) {
+      const choices = field.options.filter(option => /^(mobile(?: phone)?|cell(?:ular)?(?: phone)?)$/i.test(option.trim()));
+      return choices.length === 1 ? choices[0] : null;
+    }
+    const mappings = [
+      [/degree|education|qualification/i, ['degree']],
+      [/university|college|school|institution/i, ['university', 'school']],
+      [/location|city|country|state|province/i, ['location', 'city', 'country', 'state', 'province']],
+      [/graduat/i, ['graduationDate']],
+      [/skill/i, ['skills']],
+    ];
+    const keys = mappings.find(([pattern]) => pattern.test(label))?.[1] || [];
+    const values = keys.flatMap(key => Array.isArray(profile?.[key]) ? profile[key] : [profile?.[key]])
+      .filter(value => typeof value === 'string' && value.trim());
+    const matches = field.options.filter(option => values.some(value => norm(value) === norm(option)));
+    if (matches.length) return matches.length === 1 ? matches[0] : null;
+    // Degree level is explicit in these qualifications; match the portal's
+    // category without making the model invent a different qualification.
+    if (/degree|education|qualification/i.test(label) && typeof profile?.degree === 'string') {
+      const levels = [
+        [/\b(bachelor|baccalaureate|bfa|bsc|b\.sc|b\.a|b\.s|ba|bs|beng|btech)\b/i, /bachelor|baccalaureate/i],
+        [/\b(master|mfa|msc|m\.sc|m\.a|m\.s|ma|ms|mba|meng|mtech)\b/i, /master|postgraduate degree/i],
+        [/\b(phd|ph\.d|doctorate|doctoral)\b/i, /doctor|ph\.?d/i],
+        [/\b(associate|aas|a\.a|a\.s)\b/i, /associate/i],
+      ];
+      const sourceLevels = levels.filter(([source]) => source.test(profile.degree));
+      if (sourceLevels.length !== 1) return null;
+      const choices = field.options.filter(option => sourceLevels[0][1].test(option));
+      return choices.length === 1 ? choices[0] : null;
+    }
+    return null;
   }
 
   async function load() {
@@ -190,6 +224,7 @@
     ASK,
     QUESTIONS,
     resolve,
+    profileOption,
     matchOption,
     load,
     save,

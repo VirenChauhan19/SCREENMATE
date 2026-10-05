@@ -93,7 +93,8 @@ const SENSITIVE_TOPICS = [
 
 export function isSensitiveTopic(fieldId: string, label: string): boolean {
   const haystack = `${fieldId} ${label}`.toLowerCase();
-  return SENSITIVE_TOPICS.some((topic) => haystack.includes(topic));
+  return SENSITIVE_TOPICS.some((topic) => haystack.includes(topic)) ||
+    /\b(consent|agree|agreement|certify|certification|attest|terms|privacy policy)\b/i.test(haystack);
 }
 
 /**
@@ -129,7 +130,7 @@ const TOPIC_MATCHERS: { topic: PreferenceTopic; match: RegExp }[] = [
   { topic: "sponsorship", match: /sponsor|visa support|h-?1b/i },
   {
     topic: "workAuthorization",
-    match: /legally (authori|entitled)|work authori[sz]ation|right to work|eligible to work|citizenship/i,
+    match: /legally (authori|entitled)|work authori[sz]ation|authori[sz]ed to work|right to work|eligible to work|citizenship/i,
   },
   { topic: "relocation", match: /relocat/i },
   { topic: "remotePreference", match: /remote|hybrid|on-?site preference|work location preference/i },

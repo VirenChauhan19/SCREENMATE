@@ -22,6 +22,8 @@
     "ui:e2e": "node scripts/ui-controls-e2e.js",
     "persist:e2e": "node scripts/persistence-e2e.js",
     "probe:real": "node scripts/real-sites-probe.js",
+    "compatibility:serve": "node scripts/compatibility-server.js",
+    "compatibility:policy": "tsc scripts/policy-compatibility.ts --outDir .tsbuild --module commonjs --target ES2022 --moduleResolution node --skipLibCheck && node .tsbuild/scripts/policy-compatibility.js",
     "demo:record": "node demo/record.js",
     "demo:cut": "node demo/cut.js"
   },

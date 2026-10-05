@@ -306,6 +306,18 @@ defeats the scanner it reports that instead of guessing.
 
 ### Multi-step applications
 
+Run `npm run compatibility:serve` and open `http://127.0.0.1:8100/` to run the
+local browser regression suite. It exercises the existing portal fixtures plus
+delayed dropdown options, shadow-root labels and selects, repeated field names,
+separate radio groups, required consent, framework element replacement, late
+application dialogs, automatic profile and saved-answer selection without dropdown
+prompts, and navigation refusal. No model calls or employer submissions
+are made. Run `npm run compatibility:policy` for the matching server-policy checks.
+
+Compatibility depends on the controls a site exposes; these checks establish
+fixture coverage, not a guarantee for every live employer portal. Account sign-in,
+CAPTCHAs, document uploads, and unsupported widgets require user input.
+
 Real applications are wizards. SCREENMATE fills a step, verifies every write,
 clicks **Next**, re-scans the new step, and keeps going — up to 8 steps.
 
@@ -388,20 +400,31 @@ survives the panel re-rendering.
 ### Standing answers
 
 Every application asks the same dozen questions. Answering them mid-run, on every
-site, is worse than answering once — so the first run collects them:
+site, is worse than answering once. The optional **Saved answers** panel stores them:
 
 work authorization · sponsorship · relocation · work arrangement · salary ·
 start date · gender · ethnicity · veteran status · disability status
 
 The safety property is unchanged, and worth being precise about: the agent still
 never *decides* a sensitive question. It transcribes a decision **you** already
-made, and labels it that way in the activity log. Anything left as *Ask each
-time* still stops the run.
+made, and labels it that way in the activity log. Dropdowns do not pause the run:
+matching profile values and saved answers are selected automatically, while unknown
+answers remain incomplete and are flagged for final review. Explicit degree levels
+can map to a portal's category, such as BFA to "Bachelor's degree". Standing-answer setup
+is optional. Other user-only tasks, such as document uploads, can still pause.
 
 Answers are matched by topic, not by wording, so "No" set once also answers
-"No, I do not require sponsorship" on the next site. Before offering you choices
-on a custom dropdown, the extension opens it and reads the real options — it will
-not guess "Yes/No" at a question whose answers are nothing of the kind.
+"No, I do not require sponsorship" on the next site. The extension reads each
+dropdown's real choices before selecting; ambiguous matches remain for review.
+Phone numbers are saved with the profile and included when importing a CV. Phone
+type defaults to Mobile (or the site's equivalent Cell/Cellular choice), as
+requested. A phone number must be present in the saved profile to fill it.
+
+While a run is active, real clicks, typing, selections and scrolling invalidate
+outstanding actions. After interaction settles, SCREENMATE rescans and continues.
+It preserves fields you edit or clear, keeps your typing focus, and reclassifies
+new questions when an application section changes. Required incomplete fields
+stop automatic navigation. Final submission stays with you.
 
 ### Chrome extension
 
@@ -414,9 +437,9 @@ not guess "Yes/No" at a question whose answers are nothing of the kind.
 4. Click the toolbar icon to edit your profile or point the extension at a
    different backend URL.
 
-Auto-detection is deliberately conservative: it needs at least four fields,
-something name- or email-shaped, and either six-plus fields or a resume/cover
-letter/experience question. A login box will not summon a panel.
+Auto-detection requires at least two fields, a name or email question, and
+application-related fields or wizard context. It watches for application dialogs
+that appear after load. Ordinary login forms do not qualify.
 
 ```
 OPENROUTER_API_KEY=sk-or-...
