@@ -7,6 +7,23 @@ const ts = require('typescript');
 const { createRequire } = require('node:module');
 const root = path.resolve(__dirname, '..');
 
+test('local motivation fallback fills from saved facts and never endorses an invented draft', () => {
+  const { draftMotivation, checkAnswer } = moduleTs('src/lib/answer-quality.ts');
+  const candidate = { fieldId: 'why', question: 'Why do you want to work at Helix?', type: 'textarea', value: 'I built robot fleets for ten years.' };
+  const context = { profile: { degree: 'BFA Game Design', skills: ['React', 'TypeScript', 'Unity'] },
+    jobDescription: 'Helix builds warehouse automation systems. You will work in TypeScript and React and build an operator console.' };
+  const draft = draftMotivation(candidate, context);
+  assert.ok(draft);
+  assert.match(draft.value, /React and TypeScript/);
+  assert.match(draft.value, /operator console/);
+  assert.doesNotMatch(draft.value, /ten years|I built|Unity/);
+  assert.equal(checkAnswer({ ...candidate, value: draft.value }, context, draft.evidence).ok, true);
+  assert.equal(draftMotivation(candidate, { ...context, profile: {} }), null);
+  assert.equal(draftMotivation({ ...candidate, question: 'Describe a past project you built' }, context), null);
+  assert.equal(draftMotivation({ ...candidate, question: 'Why do you want to work here? Use your own words without AI.' }, context), null);
+  assert.equal(draftMotivation({ ...candidate, type: 'select', question: 'Visa sponsorship?' }, context), null);
+});
+
 function moduleTs(file, cache = new Map()) {
   const full = path.join(root, file);
   if (cache.has(full)) return cache.get(full).exports;

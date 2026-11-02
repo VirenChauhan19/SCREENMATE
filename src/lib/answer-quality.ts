@@ -70,3 +70,41 @@ export function checkAnswer(candidate: AnswerCandidate, context: AnswerContext, 
   if (pastClaim.test(candidate.value) && !personal.some(item => /^profile\.(?:experience|projects)$/.test(item.source))) return refuse('The draft claims past work that is not supported by saved experience or project details.');
   return {ok:true, reason:`Supported by ${[...new Set(evidence.map(item => item.source))].join(', ')}.`};
 }
+
+/** Local fallback for an ordinary motivation question. It constructs a new
+ * draft from saved facts; it never approves or reuses a rejected model draft. */
+export function draftMotivation(candidate: AnswerCandidate, context: AnswerContext) {
+  if (candidate.type !== 'textarea' ||
+      !/\bwhy\b.{0,100}\b(?:work|join|interested|role|company)\b|\b(?:motivation|interest in (?:this|the) (?:role|company))\b/i.test(candidate.question) ||
+      /\b(?:your own words|without (?:AI|assistance)|past|previous|years|project|example|salary|sponsorship|authorization)\b/i.test(candidate.question)) return null;
+  const sources = answerSources(context);
+  const allSkills = (Array.isArray(context.profile.skills) ? context.profile.skills :
+    typeof context.profile.skills === 'string' ? context.profile.skills.split(',') : [])
+    .map(skill => skill.trim()).filter(Boolean);
+  const relevant = allSkills.filter(skill => normalize(context.jobDescription).includes(normalize(skill)));
+  const skills = (relevant.length ? relevant : allSkills).slice(0, 4);
+  const degree = typeof context.profile.degree === 'string' ? context.profile.degree.trim() : '';
+  if ((!skills.length && !degree) || !context.jobDescription.trim()) return null;
+  const evidence: AnswerEvidence[] = [{ source: 'jobDescription', quote: context.jobDescription.slice(0, 1000) }];
+  const parts: string[] = [];
+  if (degree) {
+    parts.push(`My background includes ${degree}.`);
+    evidence.push({ source: 'profile.degree', quote: degree });
+  }
+  if (skills.length) {
+    const list = skills.length > 1 ? `${skills.slice(0, -1).join(', ')} and ${skills.at(-1)}` : skills[0];
+    parts.push(`My skills include ${list}, and I'd like to apply them to the work described in this role.`);
+    evidence.push({ source: 'profile.skills', quote: sources['profile.skills'] });
+  }
+  const responsibility = context.jobDescription.match(/\bYou will\s+([^.!?]+)[.!?]?/i)?.[1]?.trim();
+  if (responsibility && responsibility.length <= 500) {
+    parts.push(`The opportunity to ${responsibility} particularly appeals to me.`);
+    evidence.push({ source: 'jobDescription', quote: responsibility });
+  } else {
+    parts.push("I'm interested in the opportunity to turn that background into practical contributions to the team's work.");
+  }
+  parts.push("I'd like to contribute thoughtfully, learn from the team, and keep developing through hands-on work.");
+  const value = parts.join(' ');
+  const quality = checkAnswer({ ...candidate, value }, context, evidence);
+  return quality.ok ? { value, evidence, rationale: quality.reason } : null;
+}

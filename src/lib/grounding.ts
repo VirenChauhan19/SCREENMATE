@@ -24,7 +24,7 @@ export function factKeysFor(label: string, fieldType: string): string[] | null {
     [/^(?:university|school|college|school or university|college or university|university or college)$/, ['university']],
     [/^(?:degree|highest degree attained|education level)$/, ['degree']],
     [/^(?:graduation date|graduation year|year of graduation)$/, ['graduationDate']],
-    [/^(?:skills|technical skills|programming languages)$/, ['skills']],
+    [/^(?:skills|key skills|technical skills|programming languages)$/, ['skills']],
     [/^(?:current company|current employer)$/, ['currentCompany']],
     [/^(?:current title|current job title)$/, ['currentTitle']],
     [/^(?:location|current location|city and state)$/, ['location']],

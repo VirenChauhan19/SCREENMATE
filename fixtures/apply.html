@@ -15,6 +15,11 @@
  .radio{display:flex;gap:18px;margin-top:6px}
  .radio label{font-weight:400;display:flex;gap:6px;align-items:center}
  .radio input{width:auto}
+ button[type=submit]{background:#6d5ce8;color:#fff;border:0;border-radius:8px;padding:12px 22px;font:inherit;font-weight:600;cursor:pointer}
+ button[type=submit]:hover{background:#5948cf}
+ button[type=submit]:disabled{background:#777;cursor:default}
+ .submit-note{font-size:13px;color:#666;margin-top:10px}
+ .confirmation{margin-top:20px;background:#ecfdf3;border:1px solid #a7e6bc;border-radius:10px;padding:18px;color:#14532d}
 </style></head>
 <body>
 <main>
@@ -76,9 +81,28 @@
 
     <input type="hidden" name="csrf" value="xyz">
     <input type="password" name="password" style="display:none">
+    <button id="submit-application" type="submit">Submit application</button>
+    <p class="submit-note">Local demo only. Submitting shows a confirmation here; no application is sent to an employer.</p>
   </form>
+  <div id="submission-confirmation" class="confirmation" role="status" tabindex="-1" hidden>
+    <strong>Application submitted — demo complete.</strong>
+    <p>Your Helix Robotics application was completed in this local demo. Nothing was sent to an employer.</p>
+  </div>
 </main>
 
+<script>
+document.getElementById("app").addEventListener("submit", function (event) {
+  event.preventDefault();
+  if (!this.reportValidity()) return;
+  this.dataset.submitted = "true";
+  const button = document.getElementById("submit-application");
+  button.disabled = true;
+  button.textContent = "Application submitted";
+  const confirmation = document.getElementById("submission-confirmation");
+  confirmation.hidden = false;
+  confirmation.focus();
+});
+</script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"></script>
 <script>

@@ -817,6 +817,7 @@
       'linkedin':'linkedin', 'linkedin profile':'linkedin', 'linkedin url':'linkedin',
       'linkedin profile url':'linkedin', 'website':'portfolio', 'personal website':'portfolio',
       'github':'github', 'github profile':'github',
+      'skills':'skills', 'key skills':'skills', 'technical skills':'skills', 'programming languages':'skills',
       'current company':'currentCompany', 'current employer':'currentCompany', 'current title':'currentTitle',
     };
     const key = labels[label];
@@ -833,6 +834,10 @@
         ? locationWithCountry()
         : key && profile?.[key];
     if (typeof value === "string" && value.trim()) return value.trim();
+    if (key === 'skills' && Array.isArray(value)) {
+      const skills = value.filter(skill => typeof skill === 'string' && skill.trim()).map(skill => skill.trim());
+      return skills.length ? skills.join(', ') : null;
+    }
     if ((key === 'firstName' || key === 'lastName') && typeof profile?.name === 'string') {
       const parts = profile.name.trim().split(/\s+/);
       if (parts.length > 1) return key === 'firstName' ? parts[0] : parts[parts.length - 1];

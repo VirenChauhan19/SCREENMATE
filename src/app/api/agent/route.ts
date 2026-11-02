@@ -5,7 +5,7 @@ import { OpenRouterError, completeJson } from "@/lib/openrouter";
 import { TOOL_MANIFEST, TOOL_NAMES } from "@/lib/tools";
 import { confidenceFor, levelFor } from "@/lib/policy";
 import { factKeysFor, isGroundedValue } from "@/lib/grounding";
-import { ANSWER_RULES, checkAnswer } from "@/lib/answer-quality";
+import { ANSWER_RULES, checkAnswer, draftMotivation } from "@/lib/answer-quality";
 import { polish } from "@/lib/polish";
 import type { AgentAction, AgentActionPlan, AgentPlan } from "@/lib/types";
 
@@ -576,6 +576,26 @@ export async function POST(request: Request) {
           ? confidenceFor(level, typeById.get(fieldId as string) ?? "text")
           : undefined,
       });
+    }
+
+    // A rejected or omitted motivation draft should not become homework for
+    // the applicant when their saved facts can support a local draft.
+    for (const field of empty) {
+      if (field.sensitive || field.level === "sensitive" ||
+          actions.some(action => action.tool === "fillField" && action.args.fieldId === field.id)) continue;
+      const draft = draftMotivation(
+        { fieldId: field.id, question: field.label, type: field.type, value: "" },
+        { profile, jobDescription: applicationState.jobDescription, research },
+      );
+      if (!draft) continue;
+      for (let index = actions.length - 1; index >= 0; index--) {
+        if (actions[index].tool === "flagIssue" && actions[index].args.fieldId === field.id) actions.splice(index, 1);
+      }
+      actions.push({ tool: "fillField", args: { fieldId: field.id, value: draft.value },
+        rationale: draft.rationale, confidence: confidenceFor(field.level, field.type) });
+      for (let index = dropped.length - 1; index >= 0; index--) {
+        if (dropped[index].startsWith(`${field.id}:`)) dropped.splice(index, 1);
+      }
     }
 
     const result: AgentActionPlan = {
