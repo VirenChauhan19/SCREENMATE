@@ -8,6 +8,8 @@
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
+    "test": "node --test scripts/regression.test.cjs scripts/smart-matching.test.cjs scripts/dropdowns.test.cjs scripts/autofill-flow.test.cjs scripts/frame-activation.test.cjs scripts/navigation.test.cjs scripts/answers.test.cjs scripts/answer-api.test.cjs scripts/answer-review.test.cjs scripts/written-answers-flow.test.cjs scripts/profile-context.test.cjs scripts/request-timeouts.test.cjs",
+    "answers:e2e": "node scripts/personalized-answers-e2e.cjs",
     "e2e": "tsc scripts/e2e.ts --outDir .tsbuild --module commonjs --target ES2022 --moduleResolution node --skipLibCheck && node .tsbuild/scripts/e2e.js",
     "ext:e2e": "node scripts/ext-e2e.js",
     "fixture:serve": "node -e \"const h=require('http'),f=require('fs'),p=require('path');h.createServer((q,r)=>{const fp=p.join('fixtures',q.url==='/'?'apply.html':q.url);f.readFile(fp,(e,d)=>e?(r.statusCode=404,r.end()):r.end(d))}).listen(8099,()=>console.log('fixture on http://localhost:8099/apply.html'))\"",

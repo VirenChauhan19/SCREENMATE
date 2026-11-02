@@ -16,7 +16,7 @@ import type {
   ResearchContext,
 } from "../src/lib/types";
 
-const BASE = "http://localhost:3000";
+const BASE = process.env.SCREENMATE_TEST_URL || "http://127.0.0.1:3000";
 
 /** Node has no browser Origin, so it authenticates the way the extension does. */
 const API_KEY = (() => {
@@ -49,6 +49,7 @@ const payload = (phase: string, extra: Record<string, unknown> = {}) => ({
       sensitive: f.sensitive,
       level: f.level,
       options: f.options,
+      maxLength: f.maxLength,
     })),
     completedFields: state.completedFields,
     totalFields: state.totalFields,
@@ -172,6 +173,7 @@ async function main() {
   console.log(`\nverified=${verified} verifyFailures=${failures}`);
   const open = state.fields.filter((f) => f.required && !hasValue(f));
   console.log(`RESULT: ${open.length === 0 && report.blockers.length === 0 ? "PASS" : "FAIL"}`);
+  if (open.length || report.blockers.length || failures) process.exitCode = 1;
 }
 
 main().catch((e) => {

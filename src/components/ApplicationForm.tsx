@@ -33,6 +33,7 @@ interface Props {
   onEdit: (fieldId: string, value: string) => void;
   onRegenerate: (fieldId: string) => void;
   onFinishReview: () => void;
+  onReopenReview: () => void;
 }
 
 export function ApplicationForm({
@@ -54,6 +55,7 @@ export function ApplicationForm({
   onEdit,
   onRegenerate,
   onFinishReview,
+  onReopenReview,
 }: Props) {
   const errorsFor = (id: string) =>
     state.validationErrors.filter((e) => e.fieldId === id);
@@ -106,7 +108,7 @@ export function ApplicationForm({
             state={state}
             report={report}
             stats={stats}
-            onReview={onFinishReview}
+            onReview={onReopenReview}
           />
         )}
 

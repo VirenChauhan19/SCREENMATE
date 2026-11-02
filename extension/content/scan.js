@@ -52,11 +52,52 @@
     return rect.width > 1 && rect.height > 1;
   }
 
+  /** A styled upload can hide its native input while leaving a real picker UI. */
+  function hasVisibleUploadControl(el) {
+    if (el.tagName !== 'INPUT' || el.type !== 'file' || el.disabled ||
+      el.matches?.(':disabled') || el.closest?.('[inert], [aria-disabled="true"]')) return false;
+    // Only the native input may be hidden for styling. A hidden/inert section
+    // must not become a required task just because a label exists elsewhere.
+    for (let node = el.parentElement || el.getRootNode()?.host; node;
+      node = node.parentElement || node.getRootNode()?.host) {
+      if (node.hidden || node.inert || node.getAttribute?.('aria-hidden') === 'true' ||
+        node.getAttribute?.('aria-disabled') === 'true') return false;
+      const style = window.getComputedStyle(node);
+      if (style.display === 'none' || ['hidden', 'collapse'].includes(style.visibility) || Number(style.opacity) === 0) return false;
+    }
+    if (Array.from(el.labels || []).some(isVisible)) return true;
+    const wrappingLabel = el.closest('label');
+    if (wrappingLabel && isVisible(wrappingLabel)) return true;
+
+    // Unlabelled upload inputs are sometimes paired with a button in one field
+    // group. Require a single control and visible upload UI, never the form.
+    const group = el.closest('[role=group], [class*=upload], [class*=Upload], [class*=field], [class*=Field], [data-automation-id*=formField]');
+    if (!group || ['FORM', 'BODY'].includes(group.tagName) || !isVisible(group)) return false;
+    const controls = Array.from(group.querySelectorAll('input:not([type=hidden]), select, textarea, [role=combobox]'));
+    if (controls.length !== 1 || controls[0] !== el) return false;
+    return /upload|attach|r[eé]sum[eé]|curriculum vitae|\bcv\b|cover letter|document|file/i.test(group.textContent || '') &&
+      Array.from(group.querySelectorAll('button, [role=button], label, legend')).some(isVisible);
+  }
+
   const cleanText = (s) => (s || "").replace(/\s+/g, " ").trim();
 
   // IDs and radio names are scoped to a tree/form, not the entire page.
   function referencedElement(el, id) {
     return el.getRootNode()?.getElementById?.(id) || el.ownerDocument.getElementById(id);
+  }
+
+  /** Read only explicit help for this question, never surrounding form text. */
+  function instructionsFor(el) {
+    const descriptions = [cleanText(el.getAttribute('aria-description'))];
+    const ids = new Set((el.getAttribute('aria-describedby') || '').split(/\s+/).filter(Boolean));
+    for (const id of ids) {
+      const node = referencedElement(el, id);
+      // Validation alerts and live character counters are state, not writing
+      // instructions. Their changing text must not restart a draft in flight.
+      if (!node || !isVisible(node) || node.closest?.('[role=alert], [role=status], [aria-live]')) continue;
+      descriptions.push(cleanText(node.textContent));
+    }
+    return [...new Set(descriptions.filter(Boolean))].join(' ').slice(0, 1000) || undefined;
   }
 
   function radioMembers(el) {
@@ -228,6 +269,7 @@
 
   function isRequired(el, label) {
     if (el.required || el.getAttribute("aria-required") === "true") return true;
+    if (el.type === 'radio' && radioMembers(el).some(member => member.required || member.getAttribute('aria-required') === 'true')) return true;
     const labelled = (el.getAttribute('aria-labelledby') || '').split(/\s+/)
       .map((id) => referencedElement(el, id));
     if (Array.from(el.labels || []).concat(labelled).some((n) => /[*✱✽]/.test(n?.textContent || ''))) return true;
@@ -285,7 +327,7 @@
       return Array.from(el.options)
         .filter((o) => !isPlaceholderOption(o))
         .map((o) => cleanText(o.textContent))
-        .slice(0, 60);
+        .slice(0, 300);
     }
 
     if (el.type === "radio" && el.name) {
@@ -293,14 +335,14 @@
         .filter((r) => !r.disabled)
         .map((r) => labelFor(r))
         .filter(Boolean)
-        .slice(0, 60);
+        .slice(0, 300);
     }
 
     if (role === "radiogroup") {
       return Array.from(el.querySelectorAll("[role=radio]"))
         .map((r) => cleanText(r.getAttribute("aria-label") || r.textContent))
         .filter(Boolean)
-        .slice(0, 60);
+        .slice(0, 300);
     }
 
     if (el.type === "checkbox" || role === "checkbox" || role === "switch") {
@@ -320,7 +362,7 @@
         return Array.from(popup.querySelectorAll("[role=option]"))
           .map((o) => cleanText(o.getAttribute("aria-label") || o.textContent))
           .filter(Boolean)
-          .slice(0, 60);
+          .slice(0, 300);
       }
     }
 
@@ -357,6 +399,15 @@
     }
     if (role === "combobox" || role === "listbox") {
       // Workday renders the chosen value as the button's own text.
+      // react-select clears its search input after rendering a sibling value.
+      if (tag === "input") {
+        let container = el.parentElement;
+        for (let depth = 0; container && depth < 4; depth++, container = container.parentElement) {
+          if (container.querySelectorAll('[role="combobox"]').length > 1) break;
+          const selected = container.querySelector('[class*="singleValue"], [class*="single-value"]');
+          if (selected && cleanText(selected.textContent)) return cleanText(selected.textContent);
+        }
+      }
       const raw = cleanText(
         el.value || el.getAttribute("aria-valuetext") || el.textContent,
       )
@@ -398,9 +449,15 @@
       // skipped as a submit control.
       const isInput = el.tagName.toLowerCase() === "input";
       if (isInput && SKIP_TYPES.has((el.type || "text").toLowerCase())) continue;
-      if (!isVisible(el)) continue;
+      if (!isVisible(el) && !hasVisibleUploadControl(el)) continue;
       // The panel and popup menus are UI, not application questions.
       if (el.getRootNode()?.host?.id === 'screenmate-root') continue;
+      // A search box inside a combobox popup is part of the widget, not a new
+      // application question. Including it cancels our own option discovery.
+      const popupAncestor = el.closest('[role=listbox], [role=menu]');
+      if (popupAncestor && popupAncestor !== el && deepQueryAll('[role=combobox]').some((control) =>
+        (control.getAttribute('aria-controls') || control.getAttribute('aria-owns') || '').split(/\s+/)
+          .some((id) => referencedElement(control, id) === popupAncestor))) continue;
       if (el.getAttribute('role') === 'listbox' && deepQueryAll('[role=combobox]').some((c) =>
         (c.getAttribute('aria-controls') || c.getAttribute('aria-owns') || '').split(/\s+/).some((id) => referencedElement(c, id) === el))) continue;
 
@@ -429,47 +486,121 @@
    * Embedded forms (Taleo, iCIMS, embedded Greenhouse) sit in an iframe that
    * knows nothing about the job — the posting is in the parent document.
    */
-  function pageContext() {
-    const host = (() => {
+  function structuredJob(doc, pageUrl) {
+    const postings = [];
+    function visit(value, depth = 0) {
+      if (!value || depth > 6 || postings.length > 100) return;
+      if (Array.isArray(value)) { value.slice(0, 100).forEach(item => visit(item, depth + 1)); return; }
+      if (typeof value !== 'object') return;
+      const types = Array.isArray(value['@type']) ? value['@type'] : [value['@type']];
+      if (types.some(type => typeof type === 'string' && /(?:^|\/)JobPosting$/.test(type))) postings.push(value);
+      for (const key of ['@graph', 'mainEntity', 'itemListElement', 'item']) visit(value[key], depth + 1);
+    }
+    for (const script of [...doc.querySelectorAll('script[type="application/ld+json"]')].slice(0, 12)) {
+      if (!script.textContent || script.textContent.length > 300000) continue;
+      try { visit(JSON.parse(script.textContent)); } catch { /* Invalid page metadata is optional. */ }
+    }
+    const normalizeUrl = value => {
+      if (typeof value !== 'string') return null;
       try {
-        if (window !== window.top && window.top.document?.body) return window.top;
-      } catch {
-        /* cross-origin parent: fall back to our own document */
-      }
-      return window;
-    })();
+        const url = new URL(value, pageUrl);
+        return `${url.origin}${url.pathname.replace(/\/$/, '')}${url.search}`;
+      } catch { return null; }
+    };
+    const page = normalizeUrl(pageUrl);
+    const matches = postings.filter(post => [post.url, post['@id'],
+      typeof post.mainEntityOfPage === 'object' ? post.mainEntityOfPage?.['@id'] : post.mainEntityOfPage]
+      .some(url => page && normalizeUrl(url) === page));
+    const posting = matches.length === 1 ? matches[0] : postings.length === 1 ? postings[0] : null;
+    if (!posting) return null;
+    const text = value => typeof value === 'string' ? cleanText(value.replace(/<[^>]*>/g, ' '))
+      .replace(/&(amp|quot|apos|lt|gt|nbsp);/g, (_, entity) => ({ amp: '&', quot: '"', apos: "'", lt: '<', gt: '>', nbsp: ' ' })[entity]) : '';
+    return { title: text(posting.title), company: text(posting.hiringOrganization?.name), description: text(posting.description) };
+  }
+
+  function documentContext(host) {
     const doc = host.document;
+    const job = structuredJob(doc, host.location.href);
 
     const meta = (sel, attr = "content") =>
       cleanText(doc.querySelector(sel)?.getAttribute(attr));
 
     const company =
+      job?.company ||
       meta('meta[property="og:site_name"]') ||
       cleanText(doc.querySelector("header img[alt]")?.getAttribute("alt")) ||
       host.location.hostname.replace(/^www\./, "").split(".")[0];
 
     const jobTitle =
+      job?.title ||
       cleanText(doc.querySelector("h1")?.textContent) ||
       meta('meta[property="og:title"]') ||
       cleanText(doc.title);
 
-    let best = "";
-    for (const node of doc.querySelectorAll(
+    let best = job?.description || "";
+    for (const node of best ? [] : doc.querySelectorAll(
       "main, article, [class*=description], [class*=content], section",
     )) {
       if (node.querySelector("input, textarea, select")) continue;
       const text = cleanText(node.textContent);
       if (text.length > best.length) best = text;
     }
-    if (best.length < 120) best = cleanText(doc.body?.textContent).slice(0, 4000);
+    if (!job?.description && best.length < 120) best = cleanText(doc.body?.textContent).slice(0, 4000);
 
     return {
       company: (company || "this company").slice(0, 120),
       jobTitle: (jobTitle || "this role").slice(0, 160),
       jobDescription: best.slice(0, 4000),
-      url: host.location.href,
-      stepLabel: currentStepLabel(),
+      url: host.location.href.slice(0, 2048),
+      hasStructuredJob: Boolean(job?.title && job?.company),
     };
+  }
+
+  let parentContext = null;
+  let parentContextFrameUrl = '';
+  function boundedContext(raw) {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+    const context = {};
+    for (const [key, limit] of Object.entries({ company: 120, jobTitle: 160, jobDescription: 4000, url: 2048 })) {
+      if (typeof raw[key] !== 'string' || raw[key].length > limit) return null;
+      context[key] = cleanText(raw[key]);
+    }
+    try { if (!['http:', 'https:'].includes(new URL(context.url).protocol)) return null; } catch { return null; }
+    if (typeof raw.hasStructuredJob !== 'boolean') return null;
+    context.hasStructuredJob = raw.hasStructuredJob;
+    return context;
+  }
+
+  function setParentContext(raw) {
+    if (raw === null) { parentContext = null; parentContextFrameUrl = ''; return true; }
+    const context = boundedContext(raw);
+    if (!context) return false;
+    parentContext = context;
+    parentContextFrameUrl = window.location.href;
+    return true;
+  }
+
+  function contextForMessage() {
+    return boundedContext(documentContext(window));
+  }
+
+  function contextScore(context) {
+    const genericTitle = /^(?:this role|application|apply(?: now)?|careers?|jobs?|job application|application form|job board)(?:\s*[|:-].*)?$/i;
+    const titleScore = genericTitle.test(context.jobTitle) ? 0 : 4;
+    return titleScore + Math.min(context.jobDescription.length / 400, 3) +
+      (/^(?:this company|greenhouse|lever|workday|icims|taleo|job board)(?:\s|$)/i.test(context.company) ? 0 : 1);
+  }
+
+  function pageContext() {
+    const own = documentContext(window);
+    let parent = parentContextFrameUrl === window.location.href ? parentContext : null;
+    if (window !== window.top) {
+      try { if (window.top.document?.body) parent = documentContext(window.top); } catch { /* Use the bounded parent handoff. */ }
+    }
+    // A posting in the active form frame names its own role. A generic ATS
+    // shell instead benefits from the employer's enclosing posting.
+    const selected = !parent || own.hasStructuredJob ? own : parent.hasStructuredJob || contextScore(parent) > contextScore(own) ? parent : own;
+    return { ...selected, stepLabel: currentStepLabel() };
   }
 
   /** Reads the wizard's own progress indicator, when it exposes one. */
@@ -516,6 +647,11 @@
         required: isRequired(el, label),
         options: optionsFor(el),
         value: currentValue(el),
+        autocomplete: el.getAttribute('autocomplete') || '',
+        inputType: (el.type || '').toLowerCase(),
+        context: cleanText(el.closest('fieldset')?.querySelector('legend')?.textContent || ''),
+        maxLength: Number.isInteger(el.maxLength) && el.maxLength > 0 ? el.maxLength : undefined,
+        instructions: instructionsFor(el),
         el,
       };
     });
@@ -524,7 +660,7 @@
   /** A cheap fingerprint used to tell "the page changed" from "it didn't". */
   function pageSignature() {
     const ids = scanFields()
-      .map((f) => `${f.id}:${f.label}:${f.type}`)
+      .map((f) => `${f.id}:${f.label}:${f.type}:${f.required ? 'required' : 'optional'}:${f.maxLength || ''}:${f.instructions || ''}:${f.el.tagName === 'SELECT' ? (f.options || []).join('~') : ''}`)
       .sort()
       .join("|");
     return `${location.href}::${currentStepLabel()}::${ids}`;
@@ -533,6 +669,8 @@
   window.__screenmateScan = {
     scanFields,
     pageContext,
+    contextForMessage,
+    setParentContext,
     labelFor,
     groupLabelFor,
     currentValue,

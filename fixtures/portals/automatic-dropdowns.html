@@ -10,7 +10,7 @@
 <button type="button">Submit application</button></form><div id="test-status">Idle</div><div id="prompts"></div>
 <script>
 window.chrome={storage:{local:{get(key,callback){callback({preferences:{sponsorship:'No'}})}}},runtime:{onMessage:{addListener(){}},sendMessage(message,callback){
-  if(message.type==='screenmate:getProfile'){callback({profile:{name:'Test Applicant',phone:'+1 202-555-0123',degree:'BFA Game Design'}});return}
+  if(message.type==='screenmate:getProfile'){callback({profileConfigured:true,profile:{name:'Test Applicant',email:'applicant@example.test',phone:'+1 202-555-0123',degree:'BFA Game Design'}});return}
   if(message.route==='classify'){callback({ok:true,data:{fields:message.body.fields.map(field=>({...field,level:/sponsorship|relocat/.test(field.label)?'sensitive':'safe',sensitive:/sponsorship|relocat/.test(field.label),topic:field.id==='sponsorship'?'sponsorship':field.id==='relocation'?'relocation':null}))}});return}
   if(message.route==='agent'&&message.body.phase==='plan'){callback({ok:true,data:{goal:'Fill this application',steps:[],observation:'Application found',researchNeeded:false,researchRationale:'Profile is sufficient'}});return}
   if(message.route==='agent'){callback({ok:true,data:{decisionSummary:'Review unanswered relocation',actions:[{tool:'requestUserApproval',args:{fieldId:'relocation',reason:'No saved relocation answer'}}]}});return}

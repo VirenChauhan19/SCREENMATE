@@ -1,6 +1,9 @@
+const PROFILE_CONTEXT_FIELDS = ["professionalSummary", "experience", "projects"];
+const fieldLimit = key => PROFILE_CONTEXT_FIELDS.includes(key) ? 6000 : 500;
 const FIELDS = [
-  "name", "email", "phone", "location", "university", "degree",
-  "minor", "graduationDate", "portfolio", "linkedin",
+  "name", "firstName", "lastName", "email", "phone", "location", "city", "state", "postalCode", "addressLine1", "addressLine2", "country", "university", "degree", "fieldOfStudy",
+  "minor", "graduationDate", "portfolio", "linkedin", "github",
+  ...PROFILE_CONTEXT_FIELDS,
 ];
 
 async function load() {
@@ -15,7 +18,11 @@ async function load() {
     backendUrl = "http://localhost:3000",
     apiKey = "",
   } = await chrome.storage.local.get(["profile", "backendUrl", "apiKey"]);
-  for (const f of FIELDS) document.getElementById(f).value = profile[f] || "";
+  for (const f of FIELDS) {
+    const input = document.getElementById(f);
+    input.value = profile[f] || "";
+    input.maxLength = fieldLimit(f);
+  }
   document.getElementById("skills").value = (profile.skills || []).join(", ");
   document.getElementById("backendUrl").value = backendUrl;
   document.getElementById("apiKey").value = apiKey;
@@ -36,9 +43,10 @@ async function health(base, apiKey) {
   };
 
   try {
-    const res = await fetch(`${url}/api/health`);
+    const res = await fetch(`${url}/api/health`, { signal: AbortSignal.timeout(10000) });
     if (!res.ok) return set(`Backend returned ${res.status}.`, "bad");
     const h = await res.json();
+    if (h.service !== "screenmate" || !h.configured) return set("This address is not a SCREENMATE server.", "bad");
 
     if (!h.configured.openrouter) {
       return set("Backend is up but has no OPENROUTER_API_KEY.", "bad");
@@ -52,6 +60,7 @@ async function health(base, apiKey) {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-screenmate-key": apiKey },
         body: JSON.stringify({ fields: [] }),
+        signal: AbortSignal.timeout(10000),
       });
       if (probe.status === 401) return set("Access key rejected.", "bad");
       if (!probe.ok) return set(`Backend returned ${probe.status}.`, "bad");
@@ -78,7 +87,7 @@ async function saveProfile(extra = {}) {
     .map((s) => s.trim())
     .filter(Boolean);
 
-  const patch = { profile };
+  const patch = { profile, profileConfirmed: true };
   if (extra.cvName) {
     patch.cvImport = { name: extra.cvName, at: new Date().toISOString() };
   }
@@ -111,34 +120,41 @@ document.getElementById("save").addEventListener("click", async () => {
 
 /**
  * A custom https backend needs host permission before the worker can call it.
- * Deliberately fire-and-forget: this opens a Chrome dialog, and the status line
- * must never sit stale behind it waiting for an answer.
+ * Request it directly from the Save click, before any storage or network await.
  */
-async function ensureHostPermission(backendUrl) {
-  try {
-    const origin = new URL(backendUrl).origin + "/*";
-    if (await chrome.permissions.contains({ origins: [origin] })) return;
-    await chrome.permissions.request({ origins: [origin] });
-  } catch {
-    /* localhost is already in host_permissions, and a denial is the user's call */
-  }
+function ensureHostPermission(backendUrl) {
+  // Must be invoked in the original click gesture, before any await.
+  return chrome.permissions.request({ origins: [new URL(backendUrl).origin + "/*"] });
 }
 
 document.getElementById("saveUrl").addEventListener("click", async () => {
-  const backendUrl = document.getElementById("backendUrl").value.trim();
-  const apiKey = document.getElementById("apiKey").value.trim();
-  await chrome.storage.local.set({ backendUrl, apiKey });
-
   const btn = document.getElementById("saveUrl");
-  btn.textContent = "Saved";
-  setTimeout(() => (btn.textContent = "Save backend settings"), 1200);
-
-  // Re-check first, so the status always describes what was just saved.
-  await health(backendUrl, apiKey);
-  void ensureHostPermission(backendUrl);
+  const status = document.getElementById("health");
+  try {
+    const parsed = new URL(document.getElementById("backendUrl").value.trim());
+    const local = ["localhost", "127.0.0.1"].includes(parsed.hostname);
+    if ((parsed.protocol !== "https:" && !(parsed.protocol === "http:" && local)) || parsed.username || parsed.password || parsed.pathname !== "/" || parsed.search || parsed.hash) {
+      throw new Error("Use an HTTPS server origin, or a localhost URL for development.");
+    }
+    const permission = ensureHostPermission(parsed.origin);
+    btn.disabled = true;
+    if (!await permission) throw new Error("Server access was not allowed. Settings were not changed.");
+    const backendUrl = parsed.origin;
+    const apiKey = document.getElementById("apiKey").value.trim();
+    await chrome.storage.local.set({ backendUrl, apiKey });
+    document.getElementById("backendUrl").value = backendUrl;
+    btn.textContent = "Saved";
+    setTimeout(() => (btn.textContent = "Save backend settings"), 1200);
+    await health(backendUrl, apiKey);
+  } catch (error) {
+    status.textContent = error.message || "Could not save backend settings.";
+    status.className = "note bad";
+  } finally { btn.disabled = false; }
 });
 
 document.getElementById("open").addEventListener("click", async () => {
+  const status = document.getElementById("health");
+  try {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   if (!tab?.id) return;
   try {
@@ -146,8 +162,9 @@ document.getElementById("open").addEventListener("click", async () => {
   } catch {
     // Content script not present (page loaded before install) — inject now.
     await chrome.scripting.executeScript({
-      target: { tabId: tab.id },
+      target: { tabId: tab.id, allFrames: true },
       files: [
+        "content/connect.js",
         "content/scan.js",
         "content/act.js",
         "content/nav.js",
@@ -159,15 +176,45 @@ document.getElementById("open").addEventListener("click", async () => {
     await chrome.tabs.sendMessage(tab.id, { type: "screenmate:open" });
   }
   window.close();
+  } catch {
+    status.textContent = "SCREENMATE cannot open here. Open an employer’s application page and try again.";
+    status.className = "note bad";
+  }
+});
+
+document.getElementById("profileFile").addEventListener("change", async (event) => {
+  const status = document.getElementById("profileImportStatus");
+  try {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    if (file.size > 256000) throw new Error("This profile file is too large.");
+    const data = JSON.parse(await file.text());
+    if (data.version !== 1 || !data.profile || typeof data.profile !== "object") throw new Error("Choose a SCREENMATE profile JSON file.");
+    for (const key of FIELDS) {
+      const value = data.profile[key];
+      if (value !== undefined && (typeof value !== "string" || value.length > fieldLimit(key))) throw new Error("Invalid profile field.");
+    }
+    const skills = data.profile.skills || [];
+    if (!Array.isArray(skills) || skills.length > 60 || skills.some(value => typeof value !== "string" || value.length > 100)) throw new Error("Invalid skills.");
+    for (const key of FIELDS) document.getElementById(key).value = data.profile[key] || "";
+    document.getElementById("skills").value = skills.join(", ");
+    status.textContent = "Profile loaded below. Review the details, then choose Save profile.";
+    status.className = "note ok";
+  } catch (error) { status.textContent = error.message || "Could not import this profile."; status.className = "note bad"; }
+  finally { event.target.value = ""; }
 });
 
 /* ---------------- CV import ---------------- */
 
 const CV_KEYS = [
+  ["firstName", "First name"], ["lastName", "Last name"],
+  ["city", "City"], ["state", "State / province"], ["country", "Country"], ["postalCode", "Postal code"],
+  ["addressLine1", "Street address"], ["addressLine2", "Address line 2"], ["fieldOfStudy", "Field of study"], ["github", "GitHub"],
   ["name", "Name"], ["email", "Email"], ["phone", "Phone"], ["location", "Location"],
   ["university", "University"], ["degree", "Degree"], ["minor", "Minor"],
   ["graduationDate", "Graduation"], ["portfolio", "Portfolio"],
   ["linkedin", "LinkedIn"], ["skills", "Skills"],
+  ["professionalSummary", "Professional summary"], ["experience", "Work experience"], ["projects", "Projects"],
 ];
 
 /**

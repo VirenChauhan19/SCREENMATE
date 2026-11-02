@@ -12,7 +12,8 @@ const { unzipSync } = require("fflate");
 const CHROME = path.join(
   "C:", "Program Files", "Google", "Chrome", "Application", "chrome.exe",
 );
-const ZIP = path.resolve(__dirname, "..", "dist", "screenmate-1.0.0.zip");
+const version = require('../extension/manifest.json').version;
+const ZIP = path.resolve(__dirname, "..", "dist", `screenmate-${version}.zip`);
 const STAGE = path.join(os.tmpdir(), `screenmate-recipient-${process.pid}`);
 const PROFILE = path.join(os.tmpdir(), `screenmate-recipient-profile-${process.pid}`);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -58,7 +59,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
       return {
         backendUrl: s.backendUrl,
         hasKey: Boolean(s.apiKey),
-        hasProfile: Boolean(s.profile),
+        hasProfile: Boolean(s.profile?.name || s.profile?.email),
         health: document.getElementById("health")?.textContent || "",
         healthClass: document.getElementById("health")?.className || "",
       };
@@ -70,7 +71,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
     check("backend URL seeded from the zip", /vercel\.app/.test(state.backendUrl || ""));
     check("access key seeded from the zip", state.hasKey);
-    check("default profile present", state.hasProfile);
+    check("no example personal details on a fresh install", !state.hasProfile);
     check(
       "popup reports a working connection",
       /connected/i.test(state.health) && state.healthClass.includes("ok"),

@@ -6,6 +6,8 @@
  * the tool layer, and the UI badges.
  */
 
+import { isNarrativeField } from "./answers";
+
 export type ActionLevel = "safe" | "review" | "sensitive";
 export type Confidence = "high" | "medium" | "user";
 
@@ -98,11 +100,6 @@ export function isSensitiveTopic(fieldId: string, label: string): boolean {
 }
 
 /**
- * `fieldType` matters on pages the policy has never seen: an id like
- * `question_48219` tells us nothing, but a textarea is free text by
- * definition, which is generated rather than copied and therefore REVIEW.
- */
-/**
  * Canonical topics for the questions every application asks. A stored answer is
  * keyed by topic, so the preference you set once on one site matches the same
  * question worded differently on the next.
@@ -167,8 +164,9 @@ export function levelFor(
   if (topic && topic !== "referralSource") return "sensitive";
 
   const known = FIELD_LEVEL[fieldId];
-  if (known) return known;
-  return fieldType === "textarea" ? "review" : "safe";
+  if (known === "sensitive") return known;
+  if (isNarrativeField(fieldType || "text", label)) return "review";
+  return known || "safe";
 }
 
 /**
@@ -176,17 +174,16 @@ export function levelFor(
  * directly the written value traces back to stored profile data.
  *
  * - high   — copied verbatim from one profile value
- * - medium — assembled, inferred, or generated from several inputs
+ * - medium — assembled or generated from several inputs
  * - user   — the agent may not decide this at all
  */
 export function confidenceFor(
   level: ActionLevel,
-  fieldType: string,
+  _fieldType: string,
 ): Confidence {
   if (level === "sensitive") return "user";
   if (level === "review") return "medium";
-  // Free text is never a verbatim copy, even on a safe field.
-  return fieldType === "textarea" ? "medium" : "high";
+  return "high";
 }
 
 /** Fields at this level may be written without asking first. */

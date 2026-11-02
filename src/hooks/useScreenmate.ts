@@ -185,6 +185,7 @@ export function useScreenmate() {
             sensitive: f.sensitive,
             level: f.level,
             options: f.options,
+            maxLength: f.maxLength,
           })),
           completedFields: current.completedFields,
           totalFields: current.totalFields,
@@ -227,6 +228,7 @@ export function useScreenmate() {
     }
 
     researchingRef.current = true;
+    const researchGeneration = genRef.current;
     setStatus("researching");
     markStep("research", "active");
     try {
@@ -241,6 +243,7 @@ export function useScreenmate() {
       });
       if (!res.ok) throw new Error(String(res.status));
       const data = (await res.json()) as ResearchContext;
+      if (genRef.current !== researchGeneration) return null;
       researchRef.current = data;
       setResearch(data);
       bumpStats({ sourcesUsed: data.sources.length });
@@ -256,6 +259,7 @@ export function useScreenmate() {
       markStep("research", "done");
       return data;
     } catch {
+      if (genRef.current !== researchGeneration) return null;
       log(
         "warn",
         "External research unavailable",
@@ -264,7 +268,7 @@ export function useScreenmate() {
       markStep("research", "skipped");
       return null;
     } finally {
-      researchingRef.current = false;
+      if (genRef.current === researchGeneration) researchingRef.current = false;
     }
   }, [bumpStats, log, markStep]);
 
@@ -451,7 +455,7 @@ export function useScreenmate() {
       return f && !f.reviewed;
     });
 
-    if (changesRef.current.length > 0 && unreviewed) {
+    if (nextReport.blockers.length || (changesRef.current.length > 0 && unreviewed)) {
       markStep("review", "active");
       setStatus("reviewing");
       log(
@@ -621,9 +625,11 @@ export function useScreenmate() {
         changesRef.current.length === 1 ? "" : "s"
       } confirmed by you.`,
     );
-    setReport(buildReport(next.fields));
-    markStep("review", "done");
-    setStatus("complete");
+    const report = buildReport(next.fields);
+    setReport(report);
+    markStep("review", report.blockers.length ? "active" : "done");
+    setBanner(report.blockers.length ? "Complete the required fields and correct the validation issues before finishing." : null);
+    setStatus(report.blockers.length ? "reviewing" : "complete");
   }, [commit, log, markStep, stale]);
 
   const rejectChange = useCallback(
@@ -693,7 +699,15 @@ export function useScreenmate() {
   );
 
   const completeReview = useCallback(() => {
-    setReport(buildReport(stateRef.current.fields));
+    const report = buildReport(stateRef.current.fields);
+    setReport(report);
+    const unreviewed = changesRef.current.some(change => !stateRef.current.fields.find(field => field.id === change.fieldId)?.reviewed);
+    if (report.blockers.length || unreviewed) {
+      setBanner(report.blockers.length ? "Complete the required fields and correct the validation issues before finishing." : "Review each suggested change before finishing.");
+      setStatus("reviewing");
+      return;
+    }
+    setBanner(null);
     markStep("review", "done");
     setStatus("complete");
   }, [markStep]);
@@ -873,6 +887,7 @@ export function useScreenmate() {
     editChange,
     regenerate,
     completeReview,
+    reopenReview: () => setStatus("reviewing"),
     restoreField,
     dismissContextAlert,
     changeRole,

@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><title>SCREENMATE smart dropdown checks</title>
+<style>body{font:16px/1.5 system-ui;max-width:850px;margin:32px auto;padding:0 20px}label{display:block;margin:16px 0}input,select,button{font:inherit;padding:8px}input,select{display:block}button{cursor:pointer}[role=listbox]{border:1px solid #888;padding:8px;background:#fff}[role=option]{padding:7px;cursor:pointer}[role=option]:hover{background:#eee}.pass{color:#176737}.fail{color:#b42318}.singleValue{display:block;color:#176737}#virtual-list{height:140px;overflow-y:auto;padding:0}#virtual-track{height:1800px;position:relative}#virtual-window{position:absolute;left:0;right:0}#virtual-window [role=option]{height:30px;box-sizing:border-box;padding:3px 10px}</style>
+<body data-screenmate-workspace>
+<h1>Smart dropdown checks</h1><p>Synthetic data only. These controls exercise the actual scanner, matcher and writer. They make no AI calls and submit nothing.</p>
+<button id="run-checks">Run smart dropdown checks</button><p id="status" role="status">Ready</p><ol id="results"></ol>
+<form onsubmit="return false">
+<label for="country">Country</label><select id="country"><option value="">Select one</option><option>Canada</option><option>United States</option></select>
+<label for="state">State</label><select id="state"><option value="">Select country first</option></select>
+<label for="school">School</label><div><span class="singleValue" id="school-value"></span><input id="school" role="combobox" aria-controls="school-list" aria-expanded="false" autocomplete="off"></div><div id="school-list" role="listbox" hidden></div>
+<label for="ignored">School with ignored selection</label><input id="ignored" role="combobox" aria-controls="ignored-list" aria-expanded="false" autocomplete="off"><div id="ignored-list" role="listbox" hidden></div>
+<label for="popup-school">School in popup</label><button id="popup-school" type="button" role="combobox" aria-controls="popup-list" aria-expanded="false">Select one</button><div id="popup-list" role="listbox" hidden><input aria-label="Search schools" id="popup-query"><div id="popup-options"></div></div>
+<label for="virtual">Large list</label><button type="button" id="virtual" role="combobox" aria-controls="virtual-list" aria-expanded="false">Select one</button><div role="listbox" id="virtual-list" hidden><div id="virtual-track"><div id="virtual-window"></div></div></div>
+<label for="phone">Phone number</label><input id="phone" type="tel">
+<label for="mouse-degree">Mouse-down degree menu</label><button id="mouse-degree" type="button" role="combobox" aria-controls="mouse-list" aria-expanded="false">Select one</button><div id="mouse-list" role="listbox" hidden></div>
+<label for="pointer-degree">Pointer degree menu</label><button id="pointer-degree" type="button" role="combobox" aria-controls="pointer-list" aria-expanded="false">Select one</button><div id="pointer-list" role="listbox" hidden></div>
+</form>
+<script>
+const $ = id => document.getElementById(id);
+$('country').addEventListener('change', () => setTimeout(() => {
+  const next = document.createElement('select'); next.id = 'state';
+  for (const text of ['', ...($('country').value === 'United States' ? ['Florida','Georgia'] : ['Ontario','Quebec'])]) {
+    const option = new Option(text || 'Select one', text); next.add(option);
+  }
+  $('state').replaceWith(next);
+}, 250));
+function remote(input, list, trigger, target, ignore = false, selected = null) {
+  let timer;
+  input.addEventListener('input', () => {
+    clearTimeout(timer); target.replaceChildren(); if (selected) selected.textContent = '';
+    timer = setTimeout(() => {
+      if (input.value.length < 3) { list.hidden = true; trigger.setAttribute('aria-expanded','false'); return; }
+      list.hidden = false; trigger.setAttribute('aria-expanded','true');
+      for (const label of ['SCAD','SCAD Extension'].filter(label => label.toLowerCase().includes(input.value.toLowerCase()))) {
+        const option = document.createElement('div'); option.setAttribute('role','option'); option.textContent = label;
+        option.onclick = () => {
+          if (ignore) return;
+          if (selected) { selected.textContent = label; input.value = ''; }
+          else if (trigger === input) input.value = label;
+          else trigger.textContent = label;
+          list.hidden = true; trigger.setAttribute('aria-expanded','false');
+        };
+        target.append(option);
+      }
+    }, 650);
+  });
+  trigger.addEventListener('keydown', event => { if (event.key === 'Escape') { list.hidden = true; trigger.setAttribute('aria-expanded','false'); } });
+}
+remote($('school'), $('school-list'), $('school'), $('school-list'), false, $('school-value'));
+remote($('ignored'), $('ignored-list'), $('ignored'), $('ignored-list'), true);
+remote($('popup-query'), $('popup-list'), $('popup-school'), $('popup-options'));
+$('popup-school').onclick = () => { $('popup-list').hidden = !$('popup-list').hidden; $('popup-school').setAttribute('aria-expanded', String(!$('popup-list').hidden)); };
+function renderWindow() {
+  const start = Math.floor($('virtual-list').scrollTop / 30);
+  $('virtual-window').style.top = `${start * 30}px`; $('virtual-window').replaceChildren();
+  for (let i = start; i < Math.min(start + 6, 60); i++) {
+    const option = document.createElement('div'); option.setAttribute('role','option'); option.textContent = `Option ${i}`;
+    option.onclick = () => { $('virtual').textContent = option.textContent; $('virtual-list').hidden = true; $('virtual').setAttribute('aria-expanded','false'); };
+    $('virtual-window').append(option);
+  }
+}
+$('virtual').onclick = () => { $('virtual-list').hidden = !$('virtual-list').hidden; $('virtual').setAttribute('aria-expanded', String(!$('virtual-list').hidden)); renderWindow(); };
+$('virtual-list').addEventListener('scroll', renderWindow);
+$('phone').addEventListener('input', () => { if ($('phone').value.replace(/\D/g,'') === '12025550123') $('phone').value = '+1 (202) 555-0123'; });
+function eventMenu(trigger, list, opening, selection) {
+  trigger.addEventListener(opening, event => {
+    if (event.button !== 0 || (opening === 'pointerdown' && event.pointerType !== 'mouse')) return;
+    event.preventDefault(); list.hidden = false; trigger.setAttribute('aria-expanded','true');
+  });
+  list.addEventListener('keydown', event => { if (event.key === 'Escape') { list.hidden = true; trigger.setAttribute('aria-expanded','false'); } });
+  for (const label of ["Bachelor's degree", "Master's degree"]) {
+    const option = document.createElement('div'); option.setAttribute('role','option'); option.textContent = label;
+    option.addEventListener(selection, event => {
+      if (selection === 'pointerup' && event.pointerType !== 'mouse') return;
+      trigger.textContent = label; list.hidden = true; trigger.setAttribute('aria-expanded','false');
+    });
+    list.append(option);
+  }
+}
+eventMenu($('mouse-degree'),$('mouse-list'),'mousedown','click');
+eventMenu($('pointer-degree'),$('pointer-list'),'pointerdown','pointerup');
+</script>
+<script src="/extension/content/scan.js"></script><script src="/extension/content/act.js"></script><script src="/extension/content/prefs.js"></script>
+<script>
+$('run-checks').onclick = async () => {
+  const scan = window.__screenmateScan, act = window.__screenmateAct, prefs = window.__screenmatePrefs;
+  const find = id => scan.scanFields().find(field => field.id === id);
+  let failures = 0, passes = 0;
+  const check = (label, ok) => { const row = document.createElement('li'); row.textContent = `${ok ? 'PASS' : 'FAIL'}: ${label}`; row.className = ok ? 'pass' : 'fail'; $('results').append(row); if(ok) passes++; else failures++; };
+  $('run-checks').disabled = true; $('status').textContent = 'Running'; $('results').replaceChildren();
+  try {
+    const profile = { country:'USA', state:'GA', university:'SCAD', phone:'+1 202-555-0123' };
+    const country = find('country'), countryMatch = prefs.resolveProfile(country, profile);
+    check('Country alias selects an actual option', Boolean(countryMatch && (await act.applyWrite(country,countryMatch.value)).ok));
+    await new Promise(resolve => setTimeout(resolve,350));
+    const state = find('state'), stateMatch = prefs.resolveProfile(state,profile);
+    check('New state options use the current country', Boolean(stateMatch && (await act.applyWrite(state,stateMatch.value)).ok && act.verifyWrite(state,'Georgia').ok));
+    const school = find('school');
+    const choices = await act.readOptions(school,{query:prefs.queryFor(school,profile)});
+    check('A grounded search finds delayed choices', choices.includes('SCAD'));
+    check('Discovery restores its search text', $('school').value === '' && $('school-value').textContent === '');
+    school.options = choices; const schoolMatch = prefs.resolveProfile(school,profile);
+    check('Selection commits into a sibling value', Boolean(schoolMatch && (await act.applyWrite(school,schoolMatch.value)).ok && act.verifyWrite(school,schoolMatch.value).ok));
+    const ignored = find('ignored'); const ignoredWrite = await act.applyWrite(ignored,'SCAD');
+    check('An ignored click cannot verify as selected', !ignoredWrite.ok && !act.verifyWrite(ignored,'SCAD').ok && $('ignored').value === '');
+    const signature = scan.pageSignature(); $('popup-school').click();
+    check('Popup search is not an application question', signature === scan.pageSignature() && !find('popup-query'));
+    $('popup-school').click();
+    const popupField = find('popup-school');
+    const popupChoices = await act.readOptions(popupField,{query:'SCAD'});
+    check('A search input inside the popup works', popupChoices.includes('SCAD') && (await act.applyWrite(popupField,'SCAD')).ok);
+    const virtual = find('virtual'); const longChoices = await act.readOptions(virtual);
+    check('Scrolling reveals later virtual options', longChoices.includes('Option 49'));
+    check('A reopened virtual menu selects a prior window', (await act.applyWrite(virtual,'Option 21')).ok && act.verifyWrite(virtual,'Option 21').ok);
+    const phone = find('phone'); await act.applyWrite(phone,profile.phone);
+    check('Phone formatting preserves the exact number', act.verifyWrite(phone,profile.phone).ok);
+    for (const id of ['mouse-degree', 'pointer-degree']) {
+      const field = find(id), options = await act.readOptions(field);
+      check(`${id}: real option discovery`, options.includes("Bachelor's degree"));
+      check(`${id}: menu dismissed after discovery`, $(id).getAttribute('aria-expanded') === 'false');
+      const selected = await act.applyWrite(field,"Bachelor's degree");
+      check(`${id}: selection committed`, selected.ok && act.verifyWrite(field,"Bachelor's degree").ok);
+    }
+  } catch(error) { check(error.message,false); }
+  $('status').textContent = `${failures ? 'FAIL' : 'PASS'} — ${passes} passed, ${failures} failed`; $('run-checks').disabled = false;
+};
+</script></body></html>

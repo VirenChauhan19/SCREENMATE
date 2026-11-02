@@ -19,7 +19,7 @@ function envValue(name) {
  * extension's own popup page rather than poking storage from outside, which also
  * keeps the popup itself on the tested path.
  */
-async function configureExtension(browser, extId, { backendUrl, apiKey } = {}) {
+async function configureExtension(browser, extId, { backendUrl, apiKey, profile } = {}) {
   const page = await browser.newPage();
   await page.goto(`chrome-extension://${extId}/popup/popup.html`, {
     waitUntil: "domcontentloaded",
@@ -29,14 +29,23 @@ async function configureExtension(browser, extId, { backendUrl, apiKey } = {}) {
       await chrome.storage.local.set({
         backendUrl: cfg.backendUrl,
         apiKey: cfg.apiKey,
+        ...(cfg.profile ? { profile: cfg.profile, profileConfirmed: true } : {}),
       });
     },
     {
       backendUrl: backendUrl || "http://localhost:3000",
       apiKey: apiKey ?? envValue("SCREENMATE_API_KEY"),
+      profile,
     },
   );
   await page.close();
 }
 
-module.exports = { envValue, configureExtension };
+// Synthetic fixture identity, explicitly opted into by application tests.
+const TEST_PROFILE = {
+  name: 'Viren Chauhan', firstName: 'Viren', lastName: 'Chauhan', email: 'viren@example.com',
+  university: 'SCAD', degree: 'BFA Game Design', minor: 'Applied AI', graduationDate: '2027',
+  portfolio: 'https://virenchauhan.com', linkedin: 'https://linkedin.com/in/example',
+  location: 'Atlanta, Georgia', skills: ['React', 'TypeScript', 'Python', 'Unreal Engine', 'Unity', 'AI integrations'],
+};
+module.exports = { envValue, configureExtension, TEST_PROFILE };

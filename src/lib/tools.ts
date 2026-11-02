@@ -1,5 +1,6 @@
 import { buildReport, deriveState, hasValue } from "./application";
 import { isGroundedValue } from "./grounding";
+import { isNarrativeField } from "./answers";
 import { confidenceFor } from "./policy";
 import { userProfile } from "./profile";
 import type {
@@ -237,11 +238,14 @@ export function executeAction(
           `Allowed: ${field.options.join(", ")}`,
         );
       }
-      if (!isGroundedValue(field.type, value, profile)) {
+      if (!isGroundedValue(field.type, value, profile, field.label)) {
         return refuse(
           `Blocked ungrounded value for ${field.label}`,
           "Value was not present in the user profile.",
         );
+      }
+      if (field.maxLength !== undefined && field.maxLength >= 0 && value.length > field.maxLength) {
+        return refuse(`${field.label} exceeds the allowed length`, `Use at most ${field.maxLength} characters.`);
       }
       if (hasValue(field) && field.value === value) {
         return refuse(`${field.label} already set`, "No change needed.");
@@ -253,7 +257,7 @@ export function executeAction(
       return {
         ok: true,
         message: `${field.label.replace(/\?$/, "")} ${verb}`,
-        detail: field.type === "textarea" ? truncate(value, 120) : value,
+        detail: isNarrativeField(field.type, field.label) ? truncate(value, 120) : value,
         touchedFieldId: field.id,
         state: next,
         change: {
@@ -264,7 +268,7 @@ export function executeAction(
           level: field.level,
           confidence: confidenceFor(field.level, field.type),
           verified: false,
-          regenerable: field.type === "textarea",
+          regenerable: isNarrativeField(field.type, field.label),
         },
       };
     }

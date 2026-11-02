@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { preflight, requireKey, withCors } from "@/lib/auth";
 import { z } from "zod";
 import { isSensitiveTopic, levelFor, topicFor } from "@/lib/policy";
+import { isNarrativeField } from "@/lib/answers";
 
 export const runtime = "nodejs";
 
@@ -19,7 +20,9 @@ const ScannedField = z.object({
   label: z.string().max(400).default(""),
   type: z.string().max(40).default("text"),
   required: z.boolean().default(false),
-  options: z.array(z.string().max(200)).max(60).optional(),
+  options: z.array(z.string().max(200)).max(300).optional(),
+  maxLength: z.number().int().min(0).max(2147483647).optional(),
+  instructions: z.string().max(1000).optional(),
 });
 
 const RequestSchema = z.object({
@@ -86,6 +89,7 @@ export async function POST(request: Request) {
       ...f,
       level,
       sensitive,
+      narrative: !sensitive && isNarrativeField(f.type, f.label),
       sensitiveReason: sensitive
         ? f.type === "file"
           ? FILE_REASON

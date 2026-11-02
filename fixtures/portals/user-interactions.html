@@ -16,7 +16,7 @@ document.getElementById('switch').onclick=()=>{
   document.getElementById('application').innerHTML='<label>Preferred name<input id="name" required></label><label>Email<input id="email" value="applicant@example.test"></label><label>New section notes<textarea id="notes" required></textarea></label>';
 };
 window.chrome={storage:{local:{get(key,callback){callback({preferences:{}})}}},runtime:{onMessage:{addListener(){}},sendMessage(message,callback){
-  if(message.type==='screenmate:getProfile'){callback({profile:{name:'Test Applicant'}});return}
+  if(message.type==='screenmate:getProfile'){callback({profileConfigured:true,profile:{name:'Test Applicant',email:'applicant@example.test'}});return}
   if(message.route==='classify'){setTimeout(()=>callback({ok:true,data:{fields:message.body.fields.map(field=>({...field,level:'safe',sensitive:false}))}}),100);return}
   if(message.body?.phase==='plan'){callback({ok:true,data:{goal:'Fill application',steps:[],observation:'Test application',researchNeeded:false}});return}
   if(message.body?.phase==='act'){

@@ -1,100 +1,89 @@
+import { createHmac, timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
 
-/**
- * Access control for the hosted API.
- *
- * Running on localhost these routes are effectively private. The moment they
- * are deployed they are a public endpoint spending real OpenRouter and Exa
- * credits, so a shared secret gates them.
- *
- * This is not a secret from the user — they paste it into the extension once.
- * It is a secret from everyone who happens to find the URL.
- */
-
+export const SESSION_COOKIE = "screenmate_session";
+export const SESSION_SECONDS = 12 * 60 * 60;
 const HEADER = "x-screenmate-key";
 
-/** Extensions get a stable chrome-extension:// origin; browsers do not. */
-function corsHeaders(origin: string | null): Record<string, string> {
-  const allowed =
-    origin && (origin.startsWith("chrome-extension://") || origin === "null")
-      ? origin
-      : "*";
-  return {
-    "Access-Control-Allow-Origin": allowed,
-    "Access-Control-Allow-Headers": `Content-Type, ${HEADER}`,
-    "Access-Control-Allow-Methods": "POST, OPTIONS",
-    "Access-Control-Max-Age": "86400",
-    Vary: "Origin",
-  };
-}
-
-export function withCors(res: NextResponse, request: Request): NextResponse {
-  for (const [k, v] of Object.entries(corsHeaders(request.headers.get("origin")))) {
-    res.headers.set(k, v);
-  }
-  return res;
-}
-
-export function preflight(request: Request): NextResponse {
-  return new NextResponse(null, {
-    status: 204,
-    headers: corsHeaders(request.headers.get("origin")),
-  });
-}
-
-/**
- * Returns a 401 response when the caller is not authorised, or null when it is.
- *
- * If SCREENMATE_API_KEY is unset the gate is open — that keeps local development
- * frictionless. Production sets it, and `/api/health` reports which mode is live
- * so a misconfigured deploy is obvious rather than silently public.
- */
-export function requireKey(request: Request): NextResponse | null {
-  const expected = process.env.SCREENMATE_API_KEY;
-  if (!expected) return null;
-
-  const provided = request.headers.get(HEADER);
-  if (provided && timingSafeEqual(provided, expected)) return null;
-
-  // The bundled web demo is served from this same deployment and calls these
-  // routes from the browser, where it cannot hold a secret. Same-origin
-  // requests are therefore allowed through.
-  //
-  // Be clear about what that is worth: an Origin header can be forged, so this
-  // is a deterrent against a shared URL quietly spending your credits, not a
-  // defence against someone who actually wants in. Rate limiting at the edge
-  // is the real control.
-  const origin = request.headers.get("origin");
+/** Next's internal URL may use localhost even when the browser uses 127.0.0.1.
+ * Use the direct Host header, never an untrusted forwarded-host chain. */
+export function requestOrigin(request: Request): string {
+  const url = new URL(request.url);
   const host = request.headers.get("host");
-  if (origin && host) {
-    try {
-      if (new URL(origin).host === host) return null;
-    } catch {
-      /* malformed origin: fall through to the 401 */
-    }
-  }
+  if (!host) return url.origin;
+  try {
+    const publicUrl = new URL(`${url.protocol}//${host}`);
+    if (publicUrl.username || publicUrl.password || publicUrl.pathname !== "/" || publicUrl.search || publicUrl.hash || /[\s,]/.test(host)) return url.origin;
+    return publicUrl.origin;
+  } catch { return url.origin; }
+}
 
-  return withCors(
-    NextResponse.json(
-      {
-        error: "Not authorised",
-        reason:
-          "This SCREENMATE backend requires an access key. Add it in the extension popup.",
-      },
-      { status: 401 },
-    ),
-    request,
-  );
+function equal(a: string, b: string): boolean {
+  const left = Buffer.from(a);
+  const right = Buffer.from(b);
+  return left.length === right.length && timingSafeEqual(left, right);
 }
 
 export function isKeyRequired(): boolean {
   return Boolean(process.env.SCREENMATE_API_KEY);
 }
 
-/** Constant-time compare so the key cannot be guessed a character at a time. */
-function timingSafeEqual(a: string, b: string): boolean {
-  if (a.length !== b.length) return false;
-  let diff = 0;
-  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
-  return diff === 0;
+export function validAccessKey(value: string | null): boolean {
+  const expected = process.env.SCREENMATE_API_KEY;
+  return Boolean(expected && value && equal(value, expected));
+}
+
+export function createSession(): string {
+  const expires = String(Math.floor(Date.now() / 1000) + SESSION_SECONDS);
+  const signature = createHmac("sha256", process.env.SCREENMATE_API_KEY!)
+    .update(`screenmate-session:${expires}`).digest("base64url");
+  return `${expires}.${signature}`;
+}
+
+export function hasSession(request: Request): boolean {
+  if (!isKeyRequired()) return false;
+  const token = (request.headers.get("cookie") || "").split(";")
+    .map((part) => part.trim()).find((part) => part.startsWith(`${SESSION_COOKIE}=`))
+    ?.slice(SESSION_COOKIE.length + 1);
+  if (!token) return false;
+  const [expires, signature, extra] = token.split(".");
+  if (extra || !/^\d+$/.test(expires) || !signature || Number(expires) <= Date.now() / 1000) return false;
+  const expected = createHmac("sha256", process.env.SCREENMATE_API_KEY!)
+    .update(`screenmate-session:${expires}`).digest("base64url");
+  return equal(signature, expected);
+}
+
+export function isLocalDevelopment(request: Request): boolean {
+  return process.env.NODE_ENV !== "production" &&
+    ["localhost", "127.0.0.1", "[::1]"].includes(new URL(request.url).hostname);
+}
+
+export function withCors(res: NextResponse, request: Request): NextResponse {
+  const origin = request.headers.get("origin");
+  if (origin?.startsWith("chrome-extension://")) res.headers.set("Access-Control-Allow-Origin", origin);
+  res.headers.set("Access-Control-Allow-Headers", `Content-Type, ${HEADER}`);
+  res.headers.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  res.headers.set("Access-Control-Max-Age", "86400");
+  res.headers.set("Cache-Control", "no-store");
+  res.headers.set("Vary", "Origin");
+  return res;
+}
+
+export function preflight(request: Request): NextResponse {
+  return withCors(new NextResponse(null, { status: 204 }), request);
+}
+
+/** Origin identifies a website; it is never a credential. */
+export function requireKey(request: Request): NextResponse | null {
+  if (!isKeyRequired()) {
+    if (isLocalDevelopment(request)) return null;
+    return withCors(NextResponse.json({ error: "Server setup incomplete", reason: "Set SCREENMATE_API_KEY on the server before using SCREENMATE." }, { status: 503 }), request);
+  }
+  if (validAccessKey(request.headers.get(HEADER))) return null;
+  const origin = request.headers.get("origin");
+  if (hasSession(request) && (!origin || origin === requestOrigin(request))) return null;
+  return withCors(NextResponse.json({
+    error: "Access key required",
+    reason: "Unlock SCREENMATE on the setup page, or add the access key in the extension settings.",
+  }, { status: 401 }), request);
 }

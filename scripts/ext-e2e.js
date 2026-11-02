@@ -11,7 +11,7 @@ const EXT = path.resolve(__dirname, "..", "extension");
 const PAGE = "http://localhost:8099/apply.html";
 // A dedicated profile dir so this never touches — or is blocked by — your own Chrome.
 const fs = require("fs");
-const { configureExtension } = require("./ext-helpers");
+const { configureExtension, TEST_PROFILE } = require("./ext-helpers");
 // A fresh profile each run: stale chrome.storage from a previous run
 // would mask real bugs in how preferences are saved.
 const PROFILE = path.join(os.tmpdir(), `screenmate-ext-${Date.now()}`);
@@ -41,7 +41,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     // Chrome 137+ gates --load-extension, so install through the DevTools API.
     const extId = await browser.installExtension(EXT);
     // A throwaway profile starts with empty storage; give it the backend config.
-    await configureExtension(browser, extId);
+    await configureExtension(browser, extId, { profile: TEST_PROFILE });
     console.log(`extension installed: ${extId}`);
 
     // Confirm Chrome actually accepted the unpacked extension.

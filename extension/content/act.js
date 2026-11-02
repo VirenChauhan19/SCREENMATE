@@ -20,9 +20,30 @@
   let programmaticClick = false;
   function clickControl(el) {
     programmaticClick = true;
-    try { el.click(); } finally { programmaticClick = false; }
+    try {
+      // Custom selects often open on mousedown or pointerdown and select on
+      // pointerup. HTMLElement.click() alone skips those widget handlers.
+      const bounds = el.getBoundingClientRect?.();
+      const eventOptions = { bubbles: true, cancelable: true, composed: true,
+        button: 0, buttons: 1, ctrlKey: false,
+        clientX: bounds ? bounds.left + bounds.width / 2 : 0,
+        clientY: bounds ? bounds.top + bounds.height / 2 : 0 };
+      let compatibilityMouse = true;
+      if (typeof PointerEvent === 'function') compatibilityMouse = el.dispatchEvent(new PointerEvent('pointerdown', {
+        ...eventOptions, pointerId: 1, pointerType: 'mouse', isPrimary: true,
+      }));
+      if (compatibilityMouse && typeof MouseEvent === 'function') el.dispatchEvent(new MouseEvent('mousedown', eventOptions));
+      if (!el.isConnected) return;
+      if (typeof PointerEvent === 'function') el.dispatchEvent(new PointerEvent('pointerup', {
+        ...eventOptions, buttons: 0, pointerId: 1, pointerType: 'mouse', isPrimary: true,
+      }));
+      if (!el.isConnected) return;
+      if (compatibilityMouse && typeof MouseEvent === 'function') el.dispatchEvent(new MouseEvent('mouseup', { ...eventOptions, buttons: 0 }));
+      if (el.isConnected) el.click();
+    } finally { programmaticClick = false; }
   }
   const editedFields = new Set();
+  const selections = new WeakMap();
   const interactionListeners = new Set();
   const fieldKey = field => `${location.href}:${field.id}:${field.label}:${field.type}`;
   const cancelled = version => version !== interactionVersion;
@@ -42,7 +63,10 @@
       const path = event.composedPath();
       const field = window.__screenmateScan.scanFields().find(f => path.includes(f.el) || path.some(node => node instanceof Element && f.el.contains(node)));
       if (type !== 'wheel') userFocus = field?.el || null;
-      if (field && (type === 'input' || type === 'change')) editedFields.add(fieldKey(field));
+      if (field && (type === 'input' || type === 'change')) {
+        editedFields.add(fieldKey(field));
+        selections.delete(field.el);
+      }
       for (const listener of interactionListeners) listener({ field, type });
     }, { capture: true, passive: type === 'wheel' });
   }
@@ -134,12 +158,45 @@
   }
 
   function availableOptions(popup) {
-    return popup ? Array.from(popup.querySelectorAll('[role=option], li, button'))
-      .filter((o) => !o.disabled && o.getAttribute('aria-disabled') !== 'true' && window.__screenmateScan.isVisible(o)) : [];
+    if (!popup) return [];
+    const semantic = popup.querySelectorAll('[role=option]');
+    return Array.from(semantic.length ? semantic : popup.querySelectorAll('li, button'))
+      .filter((o) => !o.disabled && o.getAttribute('aria-disabled') !== 'true' && window.__screenmateScan.isVisible(o));
+  }
+
+  const optionText = node => cleanText(node.getAttribute('aria-label') || node.textContent);
+
+  function menuScroller(popup) {
+    if (!popup) return null;
+    return [popup, ...popup.querySelectorAll('*')].find(node => node.clientHeight > 0 && node.scrollHeight > node.clientHeight + 4) || null;
+  }
+
+  function scrollMenu(popup, reset = false) {
+    const scroller = menuScroller(popup);
+    if (!scroller) return false;
+    const before = scroller.scrollTop;
+    scroller.scrollTop = reset ? 0 : Math.min(scroller.scrollHeight - scroller.clientHeight, before + Math.max(40, scroller.clientHeight * .85));
+    if (scroller.scrollTop === before) return false;
+    fire(scroller, 'scroll');
+    return true;
+  }
+
+  function searchInput(el) {
+    if (el.tagName === 'INPUT' && !el.readOnly) return el;
+    const inputs = popupFor(el)?.querySelectorAll('input:not([type]), input[type="text"], input[type="search"]');
+    return inputs?.length === 1 && !inputs[0].disabled && !inputs[0].readOnly ? inputs[0] : null;
   }
 
   function closePopup(el) {
-    el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', bubbles: true }));
+    // Selection often dismisses the menu itself. An extra Escape can bubble
+    // into an employer's enclosing application dialog and close that too.
+    if (el.getAttribute('aria-expanded') === 'false' ||
+      (el.getAttribute('aria-expanded') !== 'true' && !popupFor(el))) return;
+    const popup = popupFor(el);
+    const active = document.activeElement;
+    const activeInput = active?.tagName === 'INPUT' && (active === el || el.contains(active));
+    const target = active && (activeInput || popup?.contains(active)) ? active : el.tagName === 'INPUT' ? el : popup || el;
+    target.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', bubbles: true, cancelable: true, composed: true }));
     if (el.tagName.toLowerCase() !== 'input' && el.getAttribute('aria-expanded') === 'true') clickControl(el);
     el.blur?.();
   }
@@ -177,7 +234,7 @@
    * click the matching option. Async because the popup is usually not in the DOM
    * until the trigger is clicked.
    */
-  async function writeCombobox(el, value) {
+  async function writeCombobox(el, value, field) {
     const version = interactionVersion;
     const signature = window.__screenmateScan.pageSignature();
     const changed = () => cancelled(version) || signature !== window.__screenmateScan.pageSignature();
@@ -187,57 +244,72 @@
       return { ok: false, reason: 'Clear this dropdown directly on the application form' };
     }
 
-    // A typeahead is an <input> that only reveals its list once you type into
-    // it. Clicking does nothing, so type first and let the menu come to us.
-    const isTypeahead = el.tagName.toLowerCase() === 'input';
-    const original = isTypeahead ? el.value : null;
-
-    if (isTypeahead) {
-      nativeSetter(el, "");
-      fire(el, "input");
-      await sleep(60);
-      if (changed() || !el.isConnected) return interrupted();
-      nativeSetter(el, value);
-      fire(el, "input", "keyup");
-      await sleep(220);
-    } else {
+    let input = null, original = '', typed = false, committed = false;
+    selections.set(el, { expected: value, committed: false });
+    try {
       if (el.getAttribute('aria-expanded') !== 'true') clickControl(el);
-      await sleep(160);
-    }
-
-    let popup = null, options = [], target = null;
-    // Menus can mount before their remote options arrive. Wait for a match,
-    // rather than treating the initial empty menu as the final answer.
-    for (let i = 0; i < 24 && !target && el.isConnected; i++) {
-      if (changed()) return interrupted();
-      popup = popupFor(el);
-      options = availableOptions(popup);
-      target = options.find((o) => norm(o.getAttribute('aria-label') || o.textContent) === norm(value));
-      if (!target) await sleep(100);
-    }
-
-    if (changed() || !el.isConnected) return interrupted();
-
-    if (!target) {
-      if (isTypeahead) {
-        nativeSetter(el, original);
-        fire(el, 'input');
+      await sleep(100);
+      let popup = null, options = [], target = null, scrolls = 0, searched = false, resetScroll = false;
+      for (let i = 0; i < 80 && !target && el.isConnected; i++) {
+        if (changed()) return interrupted();
+        if (!searched && (input = searchInput(el))) {
+          original = input.value;
+          nativeSetter(input, value);
+          typed = searched = true;
+          fire(input, 'input', 'change');
+          await sleep(220);
+          if (changed()) return interrupted();
+        }
+        popup = popupFor(el);
+        if (popup && !resetScroll) {
+          resetScroll = true;
+          if (scrollMenu(popup, true)) { await sleep(100); continue; }
+        }
+        options = availableOptions(popup);
+        const matches = options.filter(option => norm(optionText(option)) === norm(value));
+        if (matches.length > 1) return { ok: false, reason: 'Several identical choices are present; choose this option directly.' };
+        target = matches[0];
+        if (!target) {
+          if (options.length && scrolls < 64 && scrollMenu(popup)) scrolls++;
+          await sleep(100);
+        }
       }
-      closePopup(el);
-      const available = options
-        .slice(0, 8)
-        .map((o) => cleanText(o.textContent))
-        .filter(Boolean);
-      return {
-        ok: false,
-        reason: `No option "${value}"${available.length ? ` — offered: ${available.join(", ")}` : ""}`,
-      };
+      if (changed() || !el.isConnected) return interrupted();
+      if (!target) return { ok: false, reason: `No option matching "${value}" in this dropdown` };
+      target.scrollIntoView?.({ block: 'nearest' });
+      const clickedPopup = popup;
+      clickControl(target);
+      // Query text alone does not prove a selection. Wait for a committed
+      // selected value or for the actual menu to close after the click.
+      for (let i = 0; i < 18; i++) {
+        if (cancelled(version)) return interrupted();
+        if (!el.isConnected) {
+          const replacement = field && resolveField(field);
+          if (!replacement) return { ok: false, reason: 'The field changed before its selection could be confirmed.' };
+          el = replacement;
+        }
+        const actual = window.__screenmateScan.currentValue(el);
+        const menuClosed = el.getAttribute('aria-expanded') === 'false' ||
+          Boolean(clickedPopup && (!clickedPopup.isConnected || !window.__screenmateScan.isVisible(clickedPopup)));
+        const selectedMarker = target.isConnected && target.getAttribute('aria-selected') === 'true';
+        const separateValue = el.tagName === 'INPUT' && norm(actual) !== norm(el.value);
+        if (norm(actual) === norm(value) && (menuClosed || selectedMarker || separateValue)) {
+          committed = true;
+          selections.set(el, { expected: value, committed: true });
+          return { ok: true };
+        }
+        await sleep(80);
+      }
+      return { ok: false, reason: 'The option was clicked but the site did not confirm the selection.' };
+    } finally {
+      if (!cancelled(version) && el.isConnected && resolveField(field) === el) {
+        if (!committed && typed && input?.isConnected && searchInput(el) === input && input.value === value) {
+          nativeSetter(input, original);
+          fire(input, 'input');
+        }
+        closePopup(el);
+      }
     }
-
-    target.scrollIntoView?.({ block: "nearest" });
-    clickControl(target);
-    await sleep(140);
-    return { ok: true };
   }
 
   /**
@@ -265,6 +337,9 @@
       const role = (el.getAttribute("role") || "").toLowerCase();
       const type = (el.type || "").toLowerCase();
       if (type === 'file') return { ok: false, reason: 'Choose the document yourself' };
+      if (field.type !== 'select' && Number.isInteger(el.maxLength) && el.maxLength >= 0 && String(value).length > el.maxLength) {
+        return { ok: false, reason: `This answer exceeds the field's ${el.maxLength}-character limit. Shorten the answer before filling it.` };
+      }
       if (tag === 'select' && el.multiple) return { ok: false, reason: 'Choose multiple options yourself' };
 
       if (type === "radio") return writeRadio(el, value);
@@ -272,7 +347,7 @@
       if (role === "radiogroup") return writeAriaRadioGroup(el, value);
       if (role === "checkbox" || role === "switch") return writeAriaCheckbox(el, value);
       if (tag === "select") return writeSelect(el, value);
-      if (role === "combobox" || role === "listbox") return writeCombobox(el, value);
+      if (role === "combobox" || role === "listbox") return writeCombobox(el, value, field);
       if (el.isContentEditable) return writeContentEditable(el, value);
       if (tag === 'input' || tag === 'textarea') return writeText(el, value);
       return { ok: false, reason: 'This custom text control needs manual input' };
@@ -292,17 +367,23 @@
     checks.push({ label: "Element still in page", ok: Boolean(el?.isConnected) });
 
     const actual = el?.isConnected ? window.__screenmateScan.currentValue(el) : "";
-    const exact = norm(actual) === norm(expected);
+    const phone = field.type !== 'select' && /\b(phone|telephone|mobile)\b/i.test(field.label) && !/\b(type|code|extension|ext)\b/i.test(field.label);
+    const digits = value => String(value || '').replace(/\D/g, '');
+    const exact = norm(actual) === norm(expected) || (phone && digits(expected).length >= 7 && digits(actual) === digits(expected));
     checks.push({
       label: "Value committed to the DOM",
       ok: exact,
     });
 
     checks.push({ label: "Field reports non-empty", ok: norm(actual).length > 0 });
+    const selection = el && selections.get(el);
+    if (selection && norm(selection.expected) === norm(expected)) {
+      checks.push({ label: 'Dropdown selection confirmed', ok: selection.committed });
+    }
 
     const invalid =
       el?.getAttribute?.("aria-invalid") === "true" ||
-      (typeof el?.checkValidity === "function" && !el.checkValidity());
+      el?.validity?.valid === false;
     checks.push({ label: "No validation error raised", ok: !invalid });
 
     const ok = checks.every((c) => c.ok);
@@ -329,7 +410,7 @@
    * the UI has to guess — and guessing "Yes/No" on an ethnicity question is how
    * you write a wrong answer into a protected field.
    */
-  async function readOptions(field) {
+  async function readOptions(field, { query = '' } = {}) {
     const version = interactionVersion;
     const signature = window.__screenmateScan.pageSignature();
     const changed = () => cancelled(version) || signature !== window.__screenmateScan.pageSignature();
@@ -339,32 +420,52 @@
     const role = (el.getAttribute("role") || "").toLowerCase();
     if (role !== "combobox" && role !== "listbox") return field.options || [];
 
-    const wasOpen = el.getAttribute("aria-expanded") === "true";
-    const isTypeahead = el.tagName.toLowerCase() === 'input';
-
-    if (!wasOpen) {
-      if (isTypeahead) {
+    const wasOpen = el.getAttribute('aria-expanded') === 'true';
+    let input = null, original = '', typed = false;
+    const found = new Set();
+    try {
+      if (!wasOpen) {
         focusQuietly(el);
         clickControl(el);
-        el.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', code: 'ArrowDown', bubbles: true }));
-      } else {
-        clickControl(el);
+        if (el.tagName === 'INPUT') el.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', code: 'ArrowDown', bubbles: true }));
+      }
+      await sleep(160);
+      let idle = 0, resetScroll = false;
+      for (let i = 0; i < 80 && found.size < 300; i++) {
+        if (changed() || !el.isConnected) return [];
+        if (query && !typed && (input = searchInput(el))) {
+          original = input.value;
+          nativeSetter(input, query);
+          typed = true;
+          fire(input, 'input', 'change');
+          await sleep(220);
+          if (changed()) return [];
+        }
+        const popup = popupFor(el);
+        if (popup && !resetScroll) {
+          resetScroll = true;
+          if (scrollMenu(popup, true)) { await sleep(100); continue; }
+        }
+        const previous = found.size;
+        for (const option of availableOptions(popup)) {
+          const label = optionText(option);
+          if (label) found.add(label);
+        }
+        const scrolled = scrollMenu(popup);
+        idle = found.size === previous && !scrolled ? idle + 1 : 0;
+        if (found.size && idle >= 3) break;
+        await sleep(100);
+      }
+      return [...found].slice(0, 300);
+    } finally {
+      if (!cancelled(version) && el.isConnected && resolveField(field) === el) {
+        if (typed && input?.isConnected && searchInput(el) === input && input.value === query) {
+          nativeSetter(input, original);
+          fire(input, 'input');
+        }
+        if (!wasOpen) closePopup(el);
       }
     }
-    await sleep(180);
-
-    let options = [];
-    for (let i = 0; i < 15 && !options.length; i++) {
-      if (changed() || !el.isConnected) return [];
-      options = availableOptions(popupFor(el))
-        .map((o) => cleanText(o.getAttribute('aria-label') || o.textContent))
-        .filter(Boolean).slice(0, 60);
-      if (!options.length) await sleep(100);
-    }
-    if (changed() || !el.isConnected) return [];
-    if (!wasOpen) closePopup(el);
-    await sleep(80);
-    return options;
   }
 
   window.__screenmateAct = {

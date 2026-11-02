@@ -37,6 +37,7 @@ export async function completeJson<S extends z.ZodTypeAny>(
   const timeout = setTimeout(() => controller.abort(), 45_000);
 
   let res: Response;
+  let responseText: string;
   try {
     res = await fetch(OPENROUTER_URL, {
       method: "POST",
@@ -54,6 +55,9 @@ export async function completeJson<S extends z.ZodTypeAny>(
         messages,
       }),
     });
+    // Keep the deadline active until the full completion arrives. Receiving
+    // HTTP headers alone does not mean the model has finished its response.
+    responseText = await res.text();
   } catch (err) {
     throw new OpenRouterError(
       err instanceof Error && err.name === "AbortError"
@@ -65,13 +69,14 @@ export async function completeJson<S extends z.ZodTypeAny>(
   }
 
   if (!res.ok) {
-    const body = await res.text().catch(() => "");
     throw new OpenRouterError(
-      `OpenRouter returned ${res.status}: ${body.slice(0, 200)}`,
+      `OpenRouter returned ${res.status}: ${responseText.slice(0, 200)}`,
     );
   }
 
-  const payload = (await res.json().catch(() => null)) as {
+  const payload = (() => {
+    try { return JSON.parse(responseText); } catch { return null; }
+  })() as {
     choices?: { message?: { content?: string } }[];
   } | null;
 

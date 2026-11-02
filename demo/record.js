@@ -14,7 +14,7 @@ const os = require("os");
 const fs = require("fs");
 const { execFileSync } = require("child_process");
 const ffmpeg = require("ffmpeg-static");
-const { configureExtension } = require("../scripts/ext-helpers");
+const { configureExtension, TEST_PROFILE } = require("../scripts/ext-helpers");
 
 const CHROME = path.join(
   "C:",
@@ -157,6 +157,7 @@ async function ensureCaption(page) {
       fs.readFileSync(path.join(EXT, "config.json"), "utf8"),
     );
     await configureExtension(browser, extId, {
+      profile: TEST_PROFILE,
       backendUrl: cfg.backendUrl,
       apiKey: cfg.apiKey,
     });

@@ -578,14 +578,14 @@
                <div class="cacts">
                  <button class="mini" data-act="editChange" data-field="${esc(c.fieldId)}">Edit</button>
                  ${
-                   c.regenerable !== false && c.level === "review"
-                     ? `<button class="mini" data-act="regen" data-field="${esc(c.fieldId)}">Regenerate</button>`
+                   c.regenerable === true && c.level === "review"
+                     ? `<button class="mini" data-act="regen" data-field="${esc(c.fieldId)}">Rewrite answer</button>`
                      : ""
                  }
                  <button class="mini" data-act="revertOne" data-field="${esc(c.fieldId)}">Revert</button>
                </div>
                <div class="editor" data-editor="${esc(c.fieldId)}" hidden>
-                 <textarea class="efield" rows="4">${esc(c.after)}</textarea>
+                 <textarea class="efield" rows="4"${Number.isInteger(c.maxLength) && c.maxLength > 0 ? ` maxlength="${c.maxLength}"` : ''}>${esc(c.after)}</textarea>
                  <div class="cacts">
                    <button class="mini go" data-act="saveEdit" data-field="${esc(c.fieldId)}">Save to page</button>
                    <button class="mini" data-act="cancelEdit" data-field="${esc(c.fieldId)}">Cancel</button>

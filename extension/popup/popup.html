@@ -1,7 +1,8 @@
 <!doctype html>
-<html>
+<html lang="en">
 <head>
 <meta charset="utf-8">
+<title>SCREENMATE settings</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
@@ -73,17 +74,34 @@
       The only source of personal facts. The agent cannot write a value that isn't here.
     </div>
     <label>Name</label><input id="name">
+    <label for="firstName">First / given name</label><input id="firstName" autocomplete="given-name">
+    <label for="lastName">Last / family name</label><input id="lastName" autocomplete="family-name">
     <label>Email</label><input id="email">
     <label>Phone number</label><input id="phone" type="tel" autocomplete="tel">
     <label>Location</label><input id="location">
+    <label for="city">City</label><input id="city" autocomplete="address-level2">
+    <label for="state">State / province</label><input id="state" autocomplete="address-level1">
+    <label for="postalCode">Postal code</label><input id="postalCode" autocomplete="postal-code">
+    <label for="addressLine1">Street address</label><input id="addressLine1" autocomplete="address-line1">
+    <label for="addressLine2">Apartment / address line 2</label><input id="addressLine2" autocomplete="address-line2">
+    <label for="country">Country</label><input id="country">
     <label>University</label><input id="university">
     <label>Degree</label><input id="degree">
+    <label for="fieldOfStudy">Field of study</label><input id="fieldOfStudy">
     <label>Minor</label><input id="minor">
     <label>Graduation</label><input id="graduationDate">
     <label>Portfolio</label><input id="portfolio">
     <label>LinkedIn</label><input id="linkedin">
+    <label for="github">GitHub</label><input id="github">
     <label>Skills (comma-separated)</label><textarea id="skills"></textarea>
+    <p class="note">These details help SCREENMATE personalize written application answers. Add real examples and results from your background.</p>
+    <label for="professionalSummary">Professional summary</label><textarea id="professionalSummary" rows="3" maxlength="6000" placeholder="Your background, strengths and professional focus"></textarea>
+    <label for="experience">Work experience and accomplishments</label><textarea id="experience" rows="5" maxlength="6000" placeholder="Roles, employers, responsibilities and accurate results"></textarea>
+    <label for="projects">Projects and examples</label><textarea id="projects" rows="5" maxlength="6000" placeholder="Your contribution, tools used and outcomes"></textarea>
     <button id="save">Save profile</button>
+    <label for="profileFile">Import profile from the website</label>
+    <input id="profileFile" type="file" accept=".json,application/json">
+    <div id="profileImportStatus" class="note" role="status"></div>
   </div>
 
   <div class="sec">

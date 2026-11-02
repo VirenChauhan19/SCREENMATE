@@ -38,8 +38,6 @@ export function ReviewPanel({
 }: Props) {
   const [individual, setIndividual] = useState(false);
 
-  if (changes.length === 0) return null;
-
   const reviewedCount = changes.filter(
     (c) => state.fields.find((f) => f.id === c.fieldId)?.reviewed,
   ).length;
@@ -107,6 +105,7 @@ export function ReviewPanel({
           <button
             type="button"
             onClick={onDone}
+            disabled={!allReviewed || busy}
             className="flex items-center gap-1.5 rounded-lg bg-accent-500 px-4 py-2 text-[12.5px] font-medium text-white transition-colors hover:bg-accent-400"
           >
             Finish review

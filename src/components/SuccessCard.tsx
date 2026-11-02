@@ -35,7 +35,7 @@ export function SuccessCard({ state, report, stats, onReview }: Props) {
         />
         <div className="min-w-0 flex-1">
           <h2 className="text-[17px] leading-tight font-semibold tracking-[-0.01em] text-mist-100">
-            Application ready
+            {clean ? "Application ready" : "Application needs attention"}
           </h2>
           <p className="mt-1.5 text-[13px] text-mist-300">
             {requiredDone} / {required.length} required fields complete

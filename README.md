@@ -25,8 +25,104 @@ and stops when a question requires human judgment.
 
 ## Two surfaces, one agent
 
-SCREENMATE ships as a **Chrome extension** that works on real job application
-forms, and as a **Next.js portal** used as a reliable demo fallback.
+SCREENMATE ships as a **Chrome extension** for real job application forms and a
+**Next.js workspace** for preparing your profile, importing a CV, installing the
+extension, and checking your connection. The sample application lives at `/demo`.
+
+### Use it on an application
+
+1. Open `/` and unlock website access with the server's `SCREENMATE_API_KEY`.
+2. Enter your own details or read a CV, review the extracted details, and save.
+   Website profiles are stored in this browser; they are not cloud accounts.
+3. Download the extension from the workspace, extract the ZIP, and use **Load
+   unpacked** at `chrome://extensions` with Developer mode enabled. This download
+   points at the website you used and contains no access key or personal data.
+4. Save the access key in the extension popup. Refresh the workspace and choose
+   **Send profile to extension**. Alternatively, download a profile copy and
+   import it in the popup, then review and save it.
+5. Open the employer's actual application form and run SCREENMATE from its panel.
+   New installs start with an empty profile. Existing sample profiles require
+   explicit review and saving before they can run.
+
+The extension can help with visible native and ARIA form controls, including
+iframes and many SPA steps. Sign-in, CAPTCHAs, uploads, unsupported controls, and
+final submission remain manual. If a step causes a full page reload, reopen
+SCREENMATE and run it on that page. Compatibility must be checked on the actual
+employer form; fixture coverage does not guarantee every Workday or other ATS site.
+
+`npm test` checks authentication, server policy enforcement, extension packaging,
+profile transfer boundaries, and selected real-form regressions without AI calls.
+`npm run e2e` exercises the configured AI/research backend on sample application
+data; it does not submit an employer application.
+
+### Personalized written answers
+
+The extension fills written answers directly into single-line and multiline
+application questions. It combines the applicant's saved skills, education,
+professional summary, work experience and projects with the actual employer's
+job description and any company research gathered for that role. Add this context
+in the website or extension profile, or review and import it from a CV.
+For embedded applications, the form frame refreshes the enclosing page's job
+context before classification. Job metadata in the active form takes precedence;
+changing the employer or role clears prior company research.
+
+Ordinary answerable questions need no approval before filling. A question about
+a specific past event needs real supporting experience; missing facts and personal
+decisions are requested instead of invented. Written answers remain editable and
+can be rewritten in the review panel. Field character and word limits are passed
+to generation and checked on the server. The live character limit is also checked
+before a DOM write.
+Oversized answers get up to two rewrite attempts with measured length feedback,
+never a silent text cut.
+A separate AI review checks personal claims against the saved profile before
+an answer is written. It can correct unsupported claims or request a missing
+personal detail. This reduces invented experience but does not guarantee that
+every answer is correct.
+Long answer requests have a bounded deadline and keep Chrome's background
+worker active only while the request is pending, following the
+[Chrome service-worker guidance](https://developer.chrome.com/docs/extensions/develop/migrate/to-service-workers#keep-the-service-worker-alive).
+
+`npm run answers:e2e` tests the configured AI backend with a synthetic applicant
+and two fictional jobs. It checks that answers differ by role, fit the field,
+produce direct fill actions, and request absent personal history. It does not
+open or submit an employer application. Its results are saved to
+`dist/personalized-answer-check.json`.
+
+### Automatic field and dropdown filling
+
+The extension fills recognizable personal, contact, address and education facts
+directly from your saved profile before generating written answers. Store city,
+state/province, country and postal code separately for precise address matching.
+First and last names are explicit fields; SCREENMATE does not guess name order.
+
+Dropdown matching uses the choices the page exposes. It understands common country
+aliases, country-specific US/Canadian region abbreviations, degree levels and
+explicit school acronyms. It searches remote comboboxes with a profile-derived
+query and scrolls bounded virtualized lists. It restores temporary search text,
+waits for selection confirmation, and rescans when dependent fields or options
+change. Phone masks can change punctuation but must preserve every digit.
+
+It keeps existing/user-edited answers and leaves ambiguous choices for review.
+Known facts do not need a model call; AI batches continue only while verified writes
+make progress. Sensitive declarations still require a compatible saved answer or
+your input, and final submission remains yours.
+
+`npm test` includes the real orchestration loop, semantic matching and asynchronous
+widget models. For actual browser fixtures, run `npm run compatibility:serve`, open
+`http://127.0.0.1:8100/`, and follow the smart-dropdown checks link. These fixtures
+do not establish compatibility with every live employer portal.
+
+The 1.2.1 update adds pointer/mouse event sequences for custom selects, required
+field and native validation blockers, and recovery when an embedded application
+frame is replaced. It also keeps navigation inside the application form and
+reports required uploads hidden behind visible upload controls. Dropdown event
+coverage follows the interaction handlers in
+[MUI Select](https://github.com/mui/material-ui/blob/master/packages/mui-material/src/Select/SelectInput.js)
+and [Radix Select](https://github.com/radix-ui/primitives/blob/main/packages/react/select/src/select.tsx);
+the automated tests use event-driven models, not live instances of those libraries.
+Live employer-site verification is still pending: the available browser connection
+rejects this session's authentication. A full document navigation currently needs
+another Run on the new page; in-page wizard changes are handled automatically.
 
 They are the same agent. The only thing that differs is where `ApplicationState`
 comes from and where tool writes land:
@@ -114,7 +210,9 @@ Updated ApplicationState ── back to the top
 src/lib/policy.ts        SAFE / REVIEW / SENSITIVE — the single source of truth
 src/lib/grounding.ts     anti-hallucination guard, shared by both surfaces
 src/lib/types.ts         shared domain types
-src/lib/profile.ts       the user profile — the ONLY source of personal facts
+src/lib/profile.ts       sample profile used only by the demo
+src/lib/applicant.ts     website applicant profile schema
+src/components/Workspace.tsx  profile, CV review, connection and extension setup
 src/lib/application.ts   field definitions, roles, derived state, validation report
 src/lib/tools.ts         the six tools, every guard, and verification
 src/lib/openrouter.ts    schema-validated model calls
@@ -123,7 +221,9 @@ src/app/api/research/    Exa search → normalized, source-attributed briefing
 src/app/api/classify/    policy applied to fields scraped from any page
 src/app/api/parse-cv/    CV → structured profile (PDF, DOCX, text)
 src/app/api/health/      deploy diagnostics; reports config, never secrets
-src/lib/auth.ts          access key + CORS for the hosted API
+src/lib/auth.ts          access key, signed website sessions and extension CORS
+src/app/api/session/     website unlock and lock
+src/app/api/extension/   credential-free extension download for this server
 src/lib/cv.ts            text extraction
 src/hooks/useScreenmate  the orchestration loop (web)
 
@@ -239,18 +339,16 @@ paste the **access key**. Chrome will ask to allow that host — that is the
 
 ### Why there is an access key
 
-Deployed, these routes are a public endpoint spending real OpenRouter and Exa
-credits. `SCREENMATE_API_KEY` gates them. Requests from the deployment's own
-origin are allowed through so the bundled web demo keeps working.
+`SCREENMATE_API_KEY` gates the paid APIs. The extension sends it in a header;
+the website exchanges it for a signed, HttpOnly, SameSite session lasting 12 hours.
+The key is not stored in website browser storage or included in website extension
+downloads. Origin headers alone never grant access. Changing the server key
+invalidates existing sessions.
 
-Be clear about what that is worth: an `Origin` header can be forged, so this is a
-deterrent against a shared URL quietly draining your credits, not a defence
-against someone who actually wants in. If this were more than a demo, the real
-control is rate limiting at the edge.
-
-If `SCREENMATE_API_KEY` is unset the gate is open, which keeps local development
-frictionless. `/api/health` reports which mode is live so a misconfigured deploy
-is obvious rather than silently public.
+Production fails closed if `SCREENMATE_API_KEY` is missing. Keyless access is
+limited to a loopback development server. `/api/health` reports provider
+configuration, not a guarantee that a provider is currently accepting requests.
+This is a private, shared-key application, not a multi-user account service.
 
 ## Setup
 
@@ -286,7 +384,7 @@ Three classes of field are surfaced but never filled: **file uploads** (a resume
 has to come from your machine), **consent checkboxes**, and anything matching a
 protected topic.
 
-Verified against live employer postings as well as fixtures. `npm run probe:real`
+Earlier read-only probes also covered live employer postings. `npm run probe:real`
 opens real application pages and reports what the scanner sees — read-only: it
 never writes a field, never clicks a navigation control, never submits.
 
@@ -413,9 +511,10 @@ answers remain incomplete and are flagged for final review. Explicit degree leve
 can map to a portal's category, such as BFA to "Bachelor's degree". Standing-answer setup
 is optional. Other user-only tasks, such as document uploads, can still pause.
 
-Answers are matched by topic, not by wording, so "No" set once also answers
-"No, I do not require sponsorship" on the next site. The extension reads each
-dropdown's real choices before selecting; ambiguous matches remain for review.
+Saved answers are reused only when the question's meaning is compatible. Inverted
+sponsorship wording, citizenship questions, salary, and availability declarations
+remain manual rather than reusing a potentially different decision. The extension
+reads each dropdown's real choices before selecting; ambiguous matches remain for review.
 Phone numbers are saved with the profile and included when importing a CV. Phone
 type defaults to Mobile (or the site's equivalent Cell/Cellular choice), as
 requested. A phone number must be present in the saved profile to fill it.
@@ -482,11 +581,9 @@ it, and **never submits**.
 
 ### Free-text answers
 
-Generated answers are constrained toward something a person would type: varied
-sentence length, contractions, a concrete detail from your profile, and a banned
-list of the usual tells (*passionate, excited to, delve, leverage, resonates,
-robust, seamless, cutting-edge…*). Em-dashes are stripped deterministically after
-generation, because the prompt alone does not hold that one.
+Written answers use plain language, concrete evidence from your profile and the
+specific employer's role. The requested format and length take precedence over
+a fixed writing style. URLs, date ranges and punctuation are preserved.
 
 ## Tech
 

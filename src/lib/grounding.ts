@@ -1,4 +1,5 @@
 import type { UserProfile } from "./types";
+import { isNarrativeField } from "./answers";
 
 /**
  * Anti-hallucination guard, shared by the in-app tool layer and the server-side
@@ -33,15 +34,18 @@ export function knownValues(profile: ProfileLike): Set<string> {
 }
 
 /**
- * `fieldType` follows the in-app vocabulary: "textarea" is free text and is
- * always allowed; "tags" is a comma-separated list checked token by token.
+ * Only recognized written questions may use drafted prose. Factual textareas
+ * retain the same copy-only rule as factual one-line inputs. Narrative claims
+ * are constrained separately by the generator's profile-evidence rules.
  */
 export function isGroundedValue(
   fieldType: string,
   value: string,
   profile: ProfileLike,
+  label = "",
 ): boolean {
-  if (fieldType === "textarea") return true;
+  if (!value.trim()) return false;
+  if (isNarrativeField(fieldType, label)) return true;
 
   const known = knownValues(profile);
 

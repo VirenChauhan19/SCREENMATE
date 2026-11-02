@@ -48,6 +48,7 @@
     observedSig: null,
     lastObservationLog: null,
     submitHandoff: null,
+    navigationIssue: null,
     prefs: {},
     needsPrefs: false,
     /** Sensitive fields already settled this run — prevents re-asking forever. */
@@ -127,9 +128,20 @@
    * ONLY source of policy levels — if it fails we fail closed and touch nothing.
    */
   async function observe(gen = S.gen) {
+    await refreshParentContext();
+    if (stale(gen)) return false;
     const signatureBefore = window.__screenmateScan.pageSignature();
     const scanned = window.__screenmateScan.scanFields();
-    S.context = window.__screenmateScan.pageContext();
+    const nextContext = window.__screenmateScan.pageContext();
+    const sameContextText = (a, b) => String(a || '').trim().toLowerCase() === String(b || '').trim().toLowerCase();
+    if (S.context.company && S.context.jobTitle &&
+      (!sameContextText(S.context.company, nextContext.company) || !sameContextText(S.context.jobTitle, nextContext.jobTitle))) {
+      // A client-side route can move to another job without replacing this
+      // content script. Reuse research across steps, never across employers or roles.
+      S.research = null;
+      S.goal = null;
+    }
+    S.context = nextContext;
 
     if (scanned.length === 0) {
       S.fields = [];
@@ -144,6 +156,8 @@
         type: f.type,
         required: f.required,
         options: f.options,
+        maxLength: f.maxLength,
+        instructions: f.instructions,
       })),
     });
 
@@ -159,6 +173,11 @@
     // Live element handles never leave the content script.
     const byId = new Map(scanned.map((f) => [f.id, f]));
     S.fields = res.data.fields.map((f) => ({
+      autocomplete: byId.get(f.id)?.autocomplete,
+      inputType: byId.get(f.id)?.inputType,
+      context: byId.get(f.id)?.context,
+      maxLength: byId.get(f.id)?.maxLength,
+      instructions: byId.get(f.id)?.instructions,
       ...f,
       el: byId.get(f.id)?.el,
       value: byId.get(f.id)?.el ? window.__screenmateScan.currentValue(byId.get(f.id).el) : "",
@@ -198,6 +217,8 @@
           sensitive: f.sensitive,
           level: f.level,
           options: f.options,
+          maxLength: f.maxLength,
+          instructions: f.instructions,
         })),
         completedFields: counts().filled,
         totalFields: S.fields.length,
@@ -307,7 +328,7 @@
 
       // Resolve against the widget's real choices, not a guess.
       if (field.type === "select" && !field.options?.length) {
-        const discovered = await window.__screenmateAct.readOptions(field);
+        const discovered = await window.__screenmateAct.readOptions(field, { query: window.__screenmatePrefs.queryFor(field, S.profile, S.prefs) });
         if (discovered.length) field.options = discovered;
       }
       if (stale(gen)) return handled;
@@ -360,20 +381,23 @@
     for (const field of S.fields) {
       if (stale(gen)) return;
       refreshValues();
-      if (!window.__screenmateAct.canAutomate(field)) continue;
-      if (!field.sensitive && field.type !== 'select' && !(field.value || '').trim() &&
-        (field.type === 'tel' || (/\b(phone|telephone|mobile)\b/i.test(field.label) &&
-          !/\b(type|device|extension|ext|country|code|sms|consent|permission)\b/i.test(field.label))) && S.profile?.phone) {
-        await applyAction({ tool: 'fillField', args: { fieldId: field.id, value: S.profile.phone } }, gen);
-      }
-      if (field.type !== 'select' || (field.value || '').trim()) continue;
-      if (!field.options?.length) {
-        const options = await window.__screenmateAct.readOptions(field);
+      if (!window.__screenmateAct.canAutomate(field) || (field.value || '').trim()) continue;
+      // A question about skills or education needs an answer to the question,
+      // not a bare copied skill list or degree merely because its label matches.
+      if (field.narrative) continue;
+      let match = window.__screenmatePrefs.resolveProfile(field, S.profile);
+      if (field.type === 'select' && !match) {
+        const query = window.__screenmatePrefs.queryFor(field, S.profile, S.prefs);
+        const options = await window.__screenmateAct.readOptions(field, { query });
         if (options.length) field.options = options;
+        match = window.__screenmatePrefs.resolveProfile(field, S.profile);
       }
       if (stale(gen)) return;
-      const value = window.__screenmatePrefs.profileOption(field, S.profile);
-      if (value) await applyAction({ tool: 'selectOption', args: { fieldId: field.id, value } }, gen);
+      if (match) await applyAction({
+        tool: field.type === 'select' ? 'selectOption' : 'fillField',
+        args: { fieldId: field.id, value: match.value }, rationale: match.reason,
+      }, gen);
+      if (S.observedSig !== window.__screenmateScan.pageSignature()) return;
     }
   }
 
@@ -419,6 +443,8 @@
       fieldId: field.id, label: field.label, before, after: value,
       verified: window.__screenmateAct.verifyWrite(field, value).ok,
       level: field.level, step: S.step,
+      regenerable: field.narrative === true && !field.sensitive,
+      maxLength: field.maxLength,
     };
     S.changes.push(change);
     log(
@@ -457,9 +483,24 @@
     setStatus("acting");
   }
 
+  function hasModelWork() {
+    return S.fields.some(field => !field.sensitive && !(field.value || '').trim() &&
+      field.type !== 'file' && window.__screenmateAct.canAutomate(field) &&
+      (field.type !== 'select' || field.options?.length));
+  }
+
   async function runPass(gen) {
     refreshValues();
     const signature = window.__screenmateScan.pageSignature();
+    if (S.observedSig !== signature) return 'changed';
+    if (!hasModelWork()) {
+      for (const field of S.fields) {
+        if (field.sensitive && field.type !== 'file' && field.required && !(field.value || '').trim()) await queueApproval(field);
+      }
+      if (signature !== window.__screenmateScan.pageSignature()) return 'changed';
+      if (S.approvalQueue.length) { setStatus('waiting'); return 'waiting'; }
+      return 'done';
+    }
     setStatus("planning");
     const res = await api("agent", payload("act"));
     if (stale(gen)) return "stale";
@@ -492,6 +533,9 @@
       }
       await applyAction(action, gen);
     }
+    // The last action can reveal a dependent question too. Reclassify it
+    // before validation or navigation, even when no old field remains open.
+    if (signature !== window.__screenmateScan.pageSignature()) return 'changed';
     markStep("fill", "done");
 
     if (S.approvalQueue.length) {
@@ -510,6 +554,13 @@
       if (current?.label === field.label && current.type === field.type) {
         field.el = current.el;
         field.value = current.value;
+        field.required = current.required;
+        if (current.el.tagName === 'SELECT' || current.el.type === 'radio') field.options = current.options;
+        field.autocomplete = current.autocomplete;
+        field.inputType = current.inputType;
+        field.context = current.context;
+        field.maxLength = current.maxLength;
+        field.instructions = current.instructions;
       }
     }
     S.approvalQueue = S.approvalQueue.filter(req => {
@@ -529,6 +580,30 @@
       (f) => f.type === "email" && f.value && !/^\S+@\S+\.\S{2,}$/.test(f.value),
     );
     const unverified = S.changes.filter((c) => !c.verified);
+    // Read validity without checkValidity(): that method dispatches invalid
+    // events and can trigger a site's error UI while we are only inspecting.
+    const invalid = S.fields.filter((f) => ((f.value || '').trim() || f.required) &&
+      (f.el?.getAttribute?.('aria-invalid') === 'true' ||
+        (f.el?.willValidate !== false && f.el?.validity?.valid === false)));
+    const blockers = new Map();
+    const addBlocker = (fieldId, message) => {
+      if (!blockers.has(fieldId)) blockers.set(fieldId, { fieldId, message });
+    };
+    for (const field of open) addBlocker(field.id, `${field.label} is required.`);
+    for (const field of badEmail) addBlocker(field.id, `${field.label} needs a valid email address.`);
+    for (const field of badUrl) addBlocker(field.id, `${field.label} needs a valid website URL.`);
+    for (const field of invalid) {
+      const detail = String(field.el?.validationMessage || '').trim().slice(0, 180);
+      addBlocker(field.id, `${field.label}: ${detail || 'The application reports an invalid value.'}`);
+    }
+    for (const change of unverified) {
+      addBlocker(change.fieldId, `${change.label} could not be verified${change.step !== S.step ? ` on step ${change.step}` : ''}. Review it on the application form.`);
+    }
+    if (S.navigationIssue) {
+      if (S.navigationIssue.signature === window.__screenmateScan.pageSignature()) {
+        addBlocker('__navigation__', S.navigationIssue.message);
+      } else S.navigationIssue = null;
+    }
 
     return {
       checks: [
@@ -540,6 +615,8 @@
         },
         { id: "urls", label: "URLs valid", ok: badUrl.length === 0 },
         { id: "email", label: "Email format valid", ok: badEmail.length === 0 },
+        { id: "site-validity", label: "No field validation errors", ok: invalid.length === 0,
+          detail: invalid.length ? `${invalid.length} fields need attention` : undefined },
         {
           id: "sensitive",
           label: "No unresolved sensitive questions",
@@ -555,11 +632,14 @@
           detail: unverified.length ? `${unverified.length} unconfirmed` : undefined,
         },
       ],
-      blockers: open.map((f) => ({
-        fieldId: f.id,
-        message: `${f.label} is required.`,
-      })),
+      blockers: [...blockers.values()],
     };
+  }
+
+  function reviewBanner(report) {
+    const requiredOnly = report.blockers.every(blocker => / is required\.$/.test(blocker.message));
+    const lead = requiredOnly ? 'Some required fields still need your input.' : 'The application still needs your attention.';
+    return `${lead} ${report.blockers.slice(0, 3).map(blocker => blocker.message).join(' ')}`;
   }
 
   function recordPage() {
@@ -601,12 +681,20 @@
         // unambiguous factual choices directly from the stored profile.
         await prepareDropdowns(gen);
         if (stale(gen)) return 'stale';
+        if (S.observedSig !== window.__screenmateScan.pageSignature()) continue;
         await applyPreferences(gen);
         if (stale(gen)) return 'stale';
 
         // Plan per step: each page of a wizard asks for different things.
         setStatus("planning");
-        const res = await api("agent", payload("plan"));
+        const res = hasModelWork() ? await api("agent", payload("plan")) : {
+          ok: true, data: {
+            goal: 'Complete this application from your saved details',
+            observation: 'Known fields filled and verified. Checking what still needs your input.',
+            researchNeeded: false, researchRationale: 'No open answer needs company research.',
+            steps: [{ kind: 'fill', label: 'Fill saved details' }, { kind: 'validate', label: 'Check the application' }, { kind: 'review', label: 'Review changes' }],
+          },
+        };
         if (stale(gen)) return 'stale';
         if (S.observedSig !== window.__screenmateScan.pageSignature()) continue;
         if (!res.ok) {
@@ -641,17 +729,13 @@
       }
       if (stale(gen)) return "stale";
 
-      let outcome = await runPass(gen);
-      let extra = 0;
-      while (outcome === "done" && extra < 1) {
-        extra += 1;
-        const open = S.fields.filter(
-          (f) => f.required && !f.sensitive && !(f.value || "").trim() &&
-            window.__screenmateAct.canAutomate(f) &&
-            !S.deferredDropdowns.has(`${S.step}:${f.id}`),
-        );
-        if (!open.length) break;
+      let outcome = 'done';
+      // Continue only while a batch makes verified progress. Large forms are
+      // not limited to two batches; unknown answers cannot cause an AI loop.
+      for (let batch = 0; batch < 12; batch++) {
+        const before = S.stats.verifiedActions;
         outcome = await runPass(gen);
+        if (outcome !== 'done' || !hasModelWork() || S.stats.verifiedActions === before) break;
       }
       if (outcome === 'changed') continue;
       if (outcome !== "done") return outcome;
@@ -666,11 +750,19 @@
       if (S.report.blockers.length) break;
       const next = window.__screenmateNav.findAdvanceControl();
       if (!next) {
+        const navigationProblem = window.__screenmateNav.navigationProblem?.();
+        if (navigationProblem) {
+          S.navigationIssue = { signature: window.__screenmateScan.pageSignature(), message: navigationProblem };
+          log('warn', 'Application navigation needs your input', navigationProblem);
+          break;
+        }
         S.submitHandoff = window.__screenmateNav.findSubmitControl();
         break;
       }
       if (S.step >= MAX_STEPS) {
         log("warn", "Step limit reached", `Stopped after ${MAX_STEPS} steps.`);
+        S.navigationIssue = { signature: window.__screenmateScan.pageSignature(),
+          message: `Step ${S.step} is not the final step. Continue on the application form, then run SCREENMATE again.` };
         break;
       }
 
@@ -680,6 +772,8 @@
       if (stale(gen)) return 'stale';
       if (!moved.ok) {
         log("warn", "Could not advance", moved.reason);
+        S.navigationIssue = { signature: window.__screenmateScan.pageSignature(),
+          message: `Could not continue from step ${S.step}: ${moved.reason || 'Check the application form and continue manually.'}` };
         break;
       }
       S.step += 1;
@@ -709,7 +803,8 @@
       );
     }
 
-    if (S.changes.length) {
+    if (S.changes.length || blockers) {
+      if (blockers) S.banner = reviewBanner(S.report);
       markStep("review", "active");
       setStatus("reviewing");
       return;
@@ -730,6 +825,13 @@
   async function startRun() {
     const info = await new Promise(resolve => chrome.runtime.sendMessage({ type: 'screenmate:getProfile' }, resolve));
     S.profile = info?.profile || S.profile || {};
+    if (!info?.profileConfigured) {
+      S.autoResume = false;
+      S.banner = "Add and save your own name and email in the SCREENMATE popup before running on a job application.";
+      log("warn", "Your profile needs setup", "Open the extension popup, review your details, and choose Save profile.");
+      paint();
+      return;
+    }
     S.prefs = await window.__screenmatePrefs.load();
     S.needsPrefs = false;
     S.autoResume = true;
@@ -741,6 +843,7 @@
     S.running = true;
     const gen = S.gen;
     S.banner = null;
+    S.navigationIssue = null;
     S.observedSig = null;
 
     try {
@@ -776,7 +879,7 @@
     );
 
     // Offer to remember it, so this question never interrupts a run again.
-    if (req.topic && remember) {
+    if (req.topic && remember && window.__screenmatePrefs.canReuseAnswer({ ...field, topic: req.topic, label: req.label })) {
       S.prefs = await window.__screenmatePrefs.setOne(req.topic, value);
       log("prefs", "Saved as a standing answer", `Applied automatically from now on.`);
     }
@@ -857,7 +960,7 @@
   async function regenerateField(fieldId) {
     if (S.running) return;
     const field = S.fields.find((f) => f.id === fieldId);
-    if (!field) return;
+    if (!field || !field.narrative || field.sensitive) return;
 
     S.running = true;
     const gen = S.gen;
@@ -943,13 +1046,21 @@
     );
     S.changes = S.changes.filter((c) => !reverted.has(c));
     S.report = validate();
-    setStatus(S.changes.length ? 'reviewing' : 'complete');
+    S.banner = S.report.blockers.length ? reviewBanner(S.report) : null;
+    setStatus(S.changes.length || S.report.blockers.length ? 'reviewing' : 'complete');
   }
 
   function acceptAll() {
     S.autoResume = false;
     log("success", "All changes accepted", `${S.changes.length} fields confirmed.`);
     S.report = validate();
+    if (S.report.blockers.length) {
+      S.banner = reviewBanner(S.report);
+      markStep("review", "active");
+      setStatus("reviewing");
+      return;
+    }
+    S.banner = null;
     markStep("review", "done");
     setStatus("complete");
   }
@@ -973,6 +1084,7 @@
       observedSig: null,
       lastObservationLog: null,
       submitHandoff: null,
+      navigationIssue: null,
       needsPrefs: false,
       resolvedSensitive: new Set(),
       deferredDropdowns: new Set(),
@@ -986,7 +1098,18 @@
 
   /* ---------------- boot ---------------- */
 
-  async function mount({ collapsed = false } = {}) {
+  let mounting = null;
+  async function mount(options = {}) {
+    if (mounting) {
+      await mounting;
+      if (!options.collapsed) S.panel?.toggle(false);
+      return;
+    }
+    mounting = mountPanel(options);
+    try { await mounting; } finally { mounting = null; }
+  }
+
+  async function mountPanel({ collapsed = false } = {}) {
     if (S.panel) {
       S.panel.toggle(false);
       return;
@@ -1010,7 +1133,7 @@
           }
           S.prefs = await window.__screenmatePrefs.load();
           S.needsPrefs = false;
-          void run();
+          void startRun();
         },
         onEditPrefs: () => {
           S.needsPrefs = true;
@@ -1083,12 +1206,90 @@
    */
   const ELECTION = "screenmate:claim";
   const isTop = window === window.top;
+  // WindowProxy survives an iframe navigation, so also identify its document.
+  const frameDocument = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
   let electionTimer = null;
   const claims = new Map();
   let electionWinner = null;
+  let winnerDocument = null;
+  let manualOpenPending = false;
+  let parentRequest = null;
+  let parentRequestSerial = 0;
+  let lastSharedContext = '';
 
-  function claimFrame(count) {
-    const msg = { __screenmate: ELECTION, count, href: location.href };
+  function sendFrameContext(source, kind, documentId, requestId) {
+    const context = window.__screenmateScan.contextForMessage?.() || null;
+    source.postMessage({ __screenmate: kind, documentId, requestId, context }, '*');
+    if (source === electionWinner) lastSharedContext = JSON.stringify(context);
+  }
+
+  function refreshParentContext() {
+    if (isTop || !window.__screenmateScan.setParentContext) return Promise.resolve();
+    // Refresh before classification/planning. A reused frame must not retain
+    // the previous posting when its parent navigates to another job.
+    if (parentRequest) parentRequest.finish();
+    window.__screenmateScan.setParentContext(null);
+    return new Promise(resolve => {
+      const requestId = `${frameDocument}-${++parentRequestSerial}`;
+      const finish = () => {
+        if (parentRequest?.requestId === requestId) {
+          clearTimeout(parentRequest.timer);
+          parentRequest = null;
+        }
+        resolve();
+      };
+      parentRequest = { requestId, finish, timer: setTimeout(finish, 500) };
+      try { window.top.postMessage({ __screenmate: 'screenmate:contextRequest', documentId: frameDocument, requestId }, '*'); }
+      catch { finish(); }
+    });
+  }
+
+  function publishChangedContext() {
+    if (!isTop || !electionWinner || electionWinner === window) return;
+    pruneClaims();
+    if (!electionWinner) return;
+    const context = window.__screenmateScan.contextForMessage?.() || null;
+    if (JSON.stringify(context) !== lastSharedContext) {
+      try { sendFrameContext(electionWinner, 'screenmate:parentContext', winnerDocument); } catch { /* Removed frame. */ }
+    }
+  }
+
+  function childFrames(root = window) {
+    const found = [];
+    try {
+      for (let i = 0; i < root.frames.length; i++) {
+        const child = root.frames[i];
+        found.push(child, ...childFrames(child));
+      }
+    } catch { /* A removed or restricted frame cannot be elected. */ }
+    return found;
+  }
+
+  function pruneClaims() {
+    const attached = new Set([window, ...childFrames()]);
+    for (const source of claims.keys()) if (!attached.has(source)) claims.delete(source);
+    if (electionWinner && !attached.has(electionWinner)) {
+      electionWinner = null;
+      winnerDocument = null;
+    }
+    return attached;
+  }
+
+  function announceWinner(source, documentId) {
+    electionWinner = source;
+    winnerDocument = documentId;
+    const expanded = manualOpenPending;
+    manualOpenPending = false;
+    if (source === window) void mount({ collapsed: !expanded });
+    else {
+      try {
+        sendFrameContext(source, expanded ? 'screenmate:openWinner' : 'screenmate:youWon', documentId);
+      } catch { electionWinner = null; winnerDocument = null; }
+    }
+  }
+
+  function claimFrame(count, manual = false) {
+    const msg = { __screenmate: ELECTION, count, href: location.href, documentId: frameDocument, manual };
     try {
       window.top.postMessage(msg, "*");
     } catch {
@@ -1100,39 +1301,58 @@
   if (isTop) {
     window.addEventListener("message", (ev) => {
       const d = ev.data;
+      if (d?.__screenmate === 'screenmate:contextRequest') {
+        if (ev.source === window || !pruneClaims().has(ev.source) || typeof d.documentId !== 'string' || d.documentId.length > 120 ||
+          typeof d.requestId !== 'string' || d.requestId.length > 160) return;
+        try { sendFrameContext(ev.source, 'screenmate:parentContext', d.documentId, d.requestId); } catch { /* Removed frame. */ }
+        return;
+      }
       if (!d || d.__screenmate !== ELECTION) return;
-      if (electionWinner || !ev.source || !Number.isFinite(d.count) || d.count < 2) return;
-      claims.set(ev.source, { count: d.count, source: ev.source });
+      if (!ev.source || !Number.isFinite(d.count) || d.count < (d.manual ? 1 : 2) || typeof d.documentId !== 'string') return;
+      if (!pruneClaims().has(ev.source)) return;
+      claims.set(ev.source, { count: d.count, source: ev.source, documentId: d.documentId });
+      if (electionWinner) {
+        // The same iframe can now contain a new document without changing its
+        // WindowProxy. Let that document reacquire the panel after navigation.
+        if (electionWinner === ev.source && winnerDocument !== d.documentId) announceWinner(ev.source, d.documentId);
+        return;
+      }
       clearTimeout(electionTimer);
       // Wait a beat for slower frames before deciding.
       electionTimer = setTimeout(() => {
+        pruneClaims();
+        if (!claims.size) return;
         const winner = [...claims.values()].reduce((a, b) => (b.count > a.count ? b : a));
-        electionWinner = winner.source;
-        if (winner.source === window) {
-          void mount({ collapsed: true });
-        } else {
-          try {
-            winner.source.postMessage(
-              { __screenmate: "screenmate:youWon" },
-              "*",
-            );
-          } catch {
-            /* ignore */
-          }
-        }
+        announceWinner(winner.source, winner.documentId);
       }, 600);
     });
   }
 
   window.addEventListener("message", (ev) => {
-    if (ev.data?.__screenmate === "screenmate:youWon" && !S.panel) {
+    if (ev.source !== window.top) return;
+    const data = ev.data;
+    if (['screenmate:youWon', 'screenmate:openWinner', 'screenmate:parentContext'].includes(data?.__screenmate)) {
+      if (data.documentId !== frameDocument) return;
+      if (data.requestId && data.requestId !== parentRequest?.requestId) return;
+      const before = window.__screenmateScan.pageContext();
+      const accepted = window.__screenmateScan.setParentContext?.(data.context);
+      if (data.requestId) parentRequest?.finish();
+      else if (accepted && S.panel && JSON.stringify(before) !== JSON.stringify(window.__screenmateScan.pageContext())) adaptToPage();
+    }
+    if (data?.__screenmate === "screenmate:youWon" && !S.panel) {
       void mount({ collapsed: true });
+    }
+    if (data?.__screenmate === 'screenmate:openWinner') void mount();
+    if (data?.__screenmate === "screenmate:identifyFrame") {
+      const count = window.__screenmateScan.scanFields().length;
+      if (count) claimFrame(count, true);
     }
   });
 
   function autoMount() {
     try {
       if (S.panel) return;
+      if (document.querySelector('[data-screenmate-workspace]')) return;
       const fields = window.__screenmateScan.scanFields();
       if (!looksLikeApplication()) return;
       claimFrame(fields.length);
@@ -1143,15 +1363,35 @@
 
   chrome.runtime.onMessage.addListener((msg) => {
     if (msg?.type !== "screenmate:toggle" && msg?.type !== "screenmate:open") return;
-    // Opened by hand: whichever frame actually holds a form takes it.
+    // Only the top frame routes a manual open; broadcasting must not mount
+    // another panel in every iframe that contains an application.
+    if (!isTop) return;
     try {
-      if (S.panel || looksLikeApplication() || isTop) void mount();
+      pruneClaims();
+      const openWinner = () => {
+        pruneClaims();
+        manualOpenPending = false;
+        if (electionWinner && electionWinner !== window) {
+          sendFrameContext(electionWinner, 'screenmate:openWinner', winnerDocument);
+        } else void mount();
+      };
+      if (electionWinner || S.panel) openWinner();
+      else {
+        manualOpenPending = true;
+        // A short first step may not satisfy auto-detection. An explicit Open
+        // asks every attached frame to identify even a one-field form.
+        for (const frame of [window, ...childFrames()]) {
+          try { frame.postMessage({ __screenmate: "screenmate:identifyFrame" }, "*"); } catch { /* removed frame */ }
+        }
+        setTimeout(() => { if (manualOpenPending) openWinner(); }, 800);
+      }
     } catch {
       /* ignore */
     }
   });
 
   window.__screenmateMount = mount;
+  window.addEventListener('popstate', publishChangedContext);
 
   // Real user events invalidate outstanding plans before the next write. Wait
   // until interaction settles and the previous loop exits, then classify anew.
@@ -1198,6 +1438,7 @@
       !m.target.closest?.('#screenmate-page-style'))) return;
     detectionTimer = setTimeout(() => {
       detectionTimer = null;
+      publishChangedContext();
       const signature = window.__screenmateScan.pageSignature();
       const changed = signature !== lastDetectedSignature;
       lastDetectedSignature = signature;
@@ -1212,8 +1453,8 @@
     }, 500);
   });
   detectionObserver.observe(document.documentElement, {
-    childList: true, subtree: true, attributes: true,
-    attributeFilter: ['hidden', 'style', 'class', 'aria-hidden', 'aria-label', 'aria-labelledby', 'disabled', 'required'],
+    childList: true, subtree: true, attributes: true, characterData: true,
+    attributeFilter: ['hidden', 'style', 'class', 'aria-hidden', 'aria-label', 'aria-labelledby', 'aria-required', 'disabled', 'required'],
   });
   autoMount();
   setTimeout(autoMount, 1500);

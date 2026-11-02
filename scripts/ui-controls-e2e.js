@@ -73,6 +73,7 @@ function envKey() {
 
     await popup.evaluate(() => {
       document.getElementById("name").value = "Test Person";
+      document.getElementById("email").value = "test@example.org";
       document.getElementById("skills").value = "Elixir, Zig";
       document.getElementById("save").click();
     });

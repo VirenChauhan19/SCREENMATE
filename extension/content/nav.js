@@ -34,6 +34,51 @@
     "a[href]",
   ].join(",");
 
+  const FORM = 'form, [role=form]';
+  const DIALOG = 'dialog, [role=dialog], [role=alertdialog]';
+  const WIDGET = '[role=menu], [role=listbox], [role=tablist], [aria-roledescription=carousel], [class*=carousel], [id*=carousel]';
+  const LANDMARK = 'header, nav, [role=navigation], [role=banner], [role=search]';
+
+  const formFor = el => el?.form || el?.closest?.(FORM) || null;
+
+  /** Only one application form/dialog may authorize a navigation control. */
+  function navigationScope() {
+    // The scanner also reports styled file inputs through their visible upload
+    // UI. Keep that ownership on upload-only steps even when the input is hidden.
+    const fields = window.__screenmateScan.scanFields()
+      .filter(field => field.el?.isConnected && (field.type === 'file' || isVisible(field.el)) &&
+        !field.el.closest?.(`${LANDMARK}, ${WIDGET}`)).map(field => field.el);
+    const forms = new Set(fields.map(formFor).filter(Boolean));
+    const dialogs = new Set(fields.map(el => el.closest?.(DIALOG)).filter(Boolean));
+    if (forms.size > 1 || dialogs.size > 1) return { ambiguous: true };
+    const form = [...forms][0] || null;
+    const dialog = [...dialogs][0] || null;
+    if (form && dialog && !dialog.contains(form)) return { ambiguous: true };
+    if (dialog && fields.some(el => !dialog.contains(el) && !(form && formFor(el) === form))) return { ambiguous: true };
+    return { form, dialog };
+  }
+
+  function inNavigationScope(el, scope = navigationScope()) {
+    if (scope.ambiguous || el.closest?.(WIDGET)) return false;
+    const form = formFor(el);
+    const dialog = el.closest?.(DIALOG) || null;
+    // A popup unrelated to the application's dialog must not take over Next.
+    if (dialog && dialog !== scope.dialog) return false;
+    if (scope.form) {
+      if (form && form !== scope.form) return false;
+      // HTML allows a footer button outside <form> with form="application".
+      return form === scope.form || scope.form.contains(el) || Boolean(scope.dialog?.contains(el));
+    }
+    if (scope.dialog) return scope.dialog.contains(el);
+    // Form-less wizards (including Workday) retain their page controls, but
+    // navigation bars, carousel controls and unrelated forms stay excluded.
+    return !form && !dialog && !el.closest?.(LANDMARK);
+  }
+
+  function available(el) {
+    return el?.isConnected && isVisible(el) && !el.disabled && el.getAttribute('aria-disabled') !== 'true';
+  }
+
   function controlText(el) {
     return cleanText(
       el.getAttribute("aria-label") ||
@@ -58,11 +103,8 @@
    * Returns null rather than guessing: a wrong click here is unrecoverable.
    */
   function findAdvanceControl() {
-    const candidates = deepQueryAll(CLICKABLE).filter((el) => {
-      if (!isVisible(el)) return false;
-      if (el.disabled || el.getAttribute("aria-disabled") === "true") return false;
-      return true;
-    });
+    const scope = navigationScope();
+    const candidates = deepQueryAll(CLICKABLE).filter(el => available(el) && inNavigationScope(el, scope));
 
     const scored = [];
     for (const el of candidates) {
@@ -88,10 +130,24 @@
     return scored[0];
   }
 
+  /** A refused ambiguous Next is a review task, not proof of the final step. */
+  function navigationProblem() {
+    if (!navigationScope().ambiguous) return null;
+    const hasForwardControl = deepQueryAll(CLICKABLE).some(el => {
+      if (!el.isConnected || !isVisible(el) || el.closest?.(`${LANDMARK}, ${WIDGET}`)) return false;
+      const text = controlText(el);
+      return text.length <= 60 && ADVANCE_RE.test(text) && !RETREAT_RE.test(text) && !isSubmitControl(el);
+    });
+    return hasForwardControl
+      ? 'Multiple forms or dialogs are visible, so SCREENMATE could not identify the application’s next step. Choose the correct Next or Continue on the application form, then run SCREENMATE again.'
+      : null;
+  }
+
   /** Reports the submit control, if the page is showing one, for the handoff. */
   function findSubmitControl() {
+    const scope = navigationScope();
     const el = deepQueryAll(CLICKABLE).find(
-      (n) => isVisible(n) && isSubmitControl(n) && controlText(n).length < 60,
+      (n) => isVisible(n) && inNavigationScope(n, scope) && isSubmitControl(n) && controlText(n).length < 60,
     );
     return el ? { el, text: controlText(el) } : null;
   }
@@ -110,7 +166,7 @@
       // Belt and braces: findAdvanceControl already excluded these.
       return { ok: false, reason: "Refusing to click a submit control" };
     }
-    if (!isVisible(control.el) || !ADVANCE_RE.test(controlText(control.el)) || RETREAT_RE.test(controlText(control.el))) {
+    if (!available(control.el) || !inNavigationScope(control.el) || !ADVANCE_RE.test(controlText(control.el)) || RETREAT_RE.test(controlText(control.el))) {
       return { ok: false, reason: 'Advance control is no longer available' };
     }
 
@@ -118,7 +174,7 @@
     control.el.scrollIntoView?.({ block: "center", behavior: "smooth" });
     await new Promise((r) => setTimeout(r, 250));
     if (cancelled()) return { ok: false, reason: 'You moved on; rescanning' };
-    if (!control.el.isConnected || !isVisible(control.el) || isSubmitControl(control.el) ||
+    if (!available(control.el) || !inNavigationScope(control.el) || isSubmitControl(control.el) ||
       !ADVANCE_RE.test(controlText(control.el)) || RETREAT_RE.test(controlText(control.el))) {
       return { ok: false, reason: 'Advance control changed before the click' };
     }
@@ -152,6 +208,7 @@
 
   window.__screenmateNav = {
     findAdvanceControl,
+    navigationProblem,
     findSubmitControl,
     isSubmitControl,
     advance,

@@ -9,25 +9,9 @@
 
 const DEFAULT_BACKEND = "http://localhost:3000";
 
-const DEFAULT_PROFILE = {
-  name: "Viren Chauhan",
-  email: "viren@example.com",
-  university: "SCAD",
-  degree: "BFA Game Design",
-  minor: "Applied AI",
-  graduationDate: "2027",
-  portfolio: "https://virenchauhan.com",
-  linkedin: "https://linkedin.com/in/example",
-  location: "Atlanta, Georgia",
-  skills: [
-    "React",
-    "TypeScript",
-    "Python",
-    "Unreal Engine",
-    "Unity",
-    "AI integrations",
-  ],
-};
+const DEFAULT_PROFILE = { name: "", email: "", skills: [] };
+const PROFILE_CONTEXT_KEYS = ["professionalSummary", "experience", "projects"];
+const PROFILE_KEYS = ["name", "firstName", "lastName", "email", "phone", "location", "city", "state", "postalCode", "addressLine1", "addressLine2", "country", "university", "degree", "fieldOfStudy", "minor", "graduationDate", "portfolio", "linkedin", "github", ...PROFILE_CONTEXT_KEYS];
 
 /**
  * A build packaged for someone else carries config.json, so the recipient does
@@ -44,7 +28,11 @@ async function bundledConfig() {
   }
 }
 
-const isLocal = (url) => !url || /localhost|127\.0\.0\.1/.test(url);
+const isLocal = (url) => {
+  if (!url) return true;
+  try { return ["localhost", "127.0.0.1", "[::1]"].includes(new URL(url).hostname); }
+  catch { return false; }
+};
 
 /**
  * Seeds settings on install, and repairs them on update.
@@ -97,7 +85,18 @@ async function backendConfig() {
 async function callApi(path, body) {
   const { base, apiKey } = await backendConfig();
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 60_000);
+  // Personalized answers may need generation, a bounded length revision, and
+  // source review before any write is authorized. Other routes remain shorter.
+  let keepAlive = null;
+  const timer = setTimeout(() => {
+    controller.abort();
+    if (keepAlive !== null) clearInterval(keepAlive);
+  }, path === '/api/agent' ? 270_000 : 60_000);
+  // Chrome's documented long-operation exception: keep this request alive,
+  // never the idle worker. The hard deadline also stops the heartbeat.
+  if (path === '/api/agent') keepAlive = setInterval(() => {
+    try { chrome.runtime.getPlatformInfo(() => { void chrome.runtime.lastError; }); } catch { /* Extension may be unloading. */ }
+  }, 25_000);
   try {
     const headers = { "Content-Type": "application/json" };
     // A hosted backend gates on this; a local one ignores it.
@@ -145,6 +144,7 @@ async function callApi(path, body) {
     };
   } finally {
     clearTimeout(timer);
+    if (keepAlive !== null) clearInterval(keepAlive);
   }
 }
 
@@ -155,6 +155,30 @@ const ROUTES = {
 };
 
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+  // Only the configured SCREENMATE website may send a profile. Employer pages
+  // cannot read settings, replace a profile, or obtain an access key here.
+  if (msg?.type === "screenmate:website") {
+    (async () => {
+      const config = await backendConfig();
+      if (_sender.frameId !== 0 || !_sender.url || new URL(_sender.url).origin !== new URL(config.base).origin) {
+        return { ok: false, error: "This website is not the configured SCREENMATE server." };
+      }
+      if (msg.action === "ping") return { ok: true };
+      if (msg.action !== "saveProfile" || !msg.profile || typeof msg.profile !== "object") return { ok: false, error: "Invalid profile." };
+      const profile = {};
+      for (const key of PROFILE_KEYS) {
+        const value = msg.profile[key] ?? "";
+        if (typeof value !== "string" || value.length > (PROFILE_CONTEXT_KEYS.includes(key) ? 6000 : 500)) return { ok: false, error: "Invalid profile field." };
+        profile[key] = value.trim();
+      }
+      if (!profile.name || !profile.email) return { ok: false, error: "Add your name and email first." };
+      if (!Array.isArray(msg.profile.skills) || msg.profile.skills.length > 60 || msg.profile.skills.some(value => typeof value !== "string" || value.length > 100)) return { ok: false, error: "Invalid skills." };
+      profile.skills = msg.profile.skills.map(value => value.trim()).filter(Boolean);
+      await chrome.storage.local.set({ profile, profileConfirmed: true });
+      return { ok: true };
+    })().then(sendResponse).catch(() => sendResponse({ ok: false, error: "Could not connect to the extension." }));
+    return true;
+  }
   if (msg?.type === "screenmate:api") {
     const path = ROUTES[msg.route];
     if (!path) {
@@ -182,11 +206,13 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   }
 
   if (msg?.type === "screenmate:getProfile") {
-    chrome.storage.local.get(["profile", "backendUrl", "apiKey"]).then((s) =>
+    chrome.storage.local.get(["profile", "backendUrl", "apiKey", "profileConfirmed"]).then((s) =>
       sendResponse({
         profile: s.profile || DEFAULT_PROFILE,
         backendUrl: s.backendUrl || DEFAULT_BACKEND,
         hasKey: Boolean(s.apiKey),
+        profileConfigured: Boolean(s.profile?.name?.trim() && s.profile?.email?.trim() &&
+          (s.profileConfirmed || s.profile.email !== "viren@example.com")),
       }),
     );
     return true;

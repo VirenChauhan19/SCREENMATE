@@ -2,9 +2,9 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "SCREENMATE — Nova Systems Careers",
+  title: "SCREENMATE — Your job application workspace",
   description:
-    "A context-aware AI workflow agent embedded inside the application it operates.",
+    "Prepare your profile, connect the SCREENMATE extension, and complete real job applications with review at every step.",
 };
 
 export default function RootLayout({
