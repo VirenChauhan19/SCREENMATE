@@ -1,0 +1,8 @@
+file 'C:/Users/chauh/OneDrive/Documents/GitHub/SCREENMATE/tmp/yc/narrated-intro.mp4'
+file 'C:/Users/chauh/OneDrive/Documents/GitHub/SCREENMATE/tmp/yc/narrated-problem.mp4'
+file 'C:/Users/chauh/OneDrive/Documents/GitHub/SCREENMATE/tmp/yc/narrated-context.mp4'
+file 'C:/Users/chauh/OneDrive/Documents/GitHub/SCREENMATE/tmp/yc/narrated-details.mp4'
+file 'C:/Users/chauh/OneDrive/Documents/GitHub/SCREENMATE/tmp/yc/narrated-verify.mp4'
+file 'C:/Users/chauh/OneDrive/Documents/GitHub/SCREENMATE/tmp/yc/narrated-personal.mp4'
+file 'C:/Users/chauh/OneDrive/Documents/GitHub/SCREENMATE/tmp/yc/narrated-review.mp4'
+file 'C:/Users/chauh/OneDrive/Documents/GitHub/SCREENMATE/tmp/yc/narrated-outro.mp4'

@@ -1,0 +1,23 @@
+{
+  "pdfs": {
+    "Screenmate_Overview.pdf": {
+      "pages": 1,
+      "text_within_margins": true,
+      "visually_reviewed": true
+    },
+    "Screenmate_YC_Workbook.pdf": {
+      "pages": 9,
+      "text_within_margins": true,
+      "visually_reviewed": true
+    }
+  },
+  "narration_words": 182,
+  "video": {
+    "duration_seconds": 100,
+    "dimensions": "1920x1080",
+    "fps": 24,
+    "audio": "Pending founder recording",
+    "decode_check": "passed",
+    "frame_review": "passed"
+  }
+}

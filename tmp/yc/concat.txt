@@ -1,0 +1,7 @@
+file 'C:/Users/chauh/OneDrive/Documents/GitHub/SCREENMATE/tmp/yc/intro-clip.mp4'
+file 'C:/Users/chauh/OneDrive/Documents/GitHub/SCREENMATE/tmp/yc/scene-01.mp4'
+file 'C:/Users/chauh/OneDrive/Documents/GitHub/SCREENMATE/tmp/yc/scene-02.mp4'
+file 'C:/Users/chauh/OneDrive/Documents/GitHub/SCREENMATE/tmp/yc/scene-03.mp4'
+file 'C:/Users/chauh/OneDrive/Documents/GitHub/SCREENMATE/tmp/yc/scene-04.mp4'
+file 'C:/Users/chauh/OneDrive/Documents/GitHub/SCREENMATE/tmp/yc/scene-05.mp4'
+file 'C:/Users/chauh/OneDrive/Documents/GitHub/SCREENMATE/tmp/yc/outro-clip.mp4'

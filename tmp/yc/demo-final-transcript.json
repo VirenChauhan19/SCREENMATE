@@ -1,0 +1,491 @@
+[
+  {
+    "start": 0.0,
+    "end": 29.82,
+    "text": " Hi, I'm Viren Chauhan and I'm building Screenmate. Applying for job means entering the same information into different websites, then writing answers for each role. Screenmate helps to do that directly on the application page. Screenmate uses your saved background to fill forms and draft answers. It checks that changes actually went through. While leaving personal decisions and",
+    "words": [
+      {
+        "start": 0.0,
+        "end": 0.96,
+        "word": " Hi,",
+        "probability": 0.7584415078163147
+      },
+      {
+        "start": 1.28,
+        "end": 1.38,
+        "word": " I'm",
+        "probability": 0.8323650658130646
+      },
+      {
+        "start": 1.38,
+        "end": 1.58,
+        "word": " Viren",
+        "probability": 0.17927349917590618
+      },
+      {
+        "start": 1.58,
+        "end": 2.18,
+        "word": " Chauhan",
+        "probability": 0.13658056205895264
+      },
+      {
+        "start": 2.18,
+        "end": 2.66,
+        "word": " and",
+        "probability": 0.747643232345581
+      },
+      {
+        "start": 2.66,
+        "end": 2.98,
+        "word": " I'm",
+        "probability": 0.9345443248748779
+      },
+      {
+        "start": 2.98,
+        "end": 3.2,
+        "word": " building",
+        "probability": 0.7605946660041809
+      },
+      {
+        "start": 3.2,
+        "end": 3.82,
+        "word": " Screenmate.",
+        "probability": 0.4034641422331333
+      },
+      {
+        "start": 4.34,
+        "end": 4.6,
+        "word": " Applying",
+        "probability": 0.9701574146747589
+      },
+      {
+        "start": 4.6,
+        "end": 4.86,
+        "word": " for",
+        "probability": 0.9847895503044128
+      },
+      {
+        "start": 4.86,
+        "end": 5.06,
+        "word": " job",
+        "probability": 0.5286462306976318
+      },
+      {
+        "start": 5.06,
+        "end": 5.4,
+        "word": " means",
+        "probability": 0.9918376803398132
+      },
+      {
+        "start": 5.4,
+        "end": 5.8,
+        "word": " entering",
+        "probability": 0.998501181602478
+      },
+      {
+        "start": 5.8,
+        "end": 6.0,
+        "word": " the",
+        "probability": 0.9832397103309631
+      },
+      {
+        "start": 6.0,
+        "end": 6.24,
+        "word": " same",
+        "probability": 0.9954138994216919
+      },
+      {
+        "start": 6.24,
+        "end": 6.54,
+        "word": " information",
+        "probability": 0.9834936857223511
+      },
+      {
+        "start": 6.54,
+        "end": 7.24,
+        "word": " into",
+        "probability": 0.9510276913642883
+      },
+      {
+        "start": 7.24,
+        "end": 7.54,
+        "word": " different",
+        "probability": 0.9920382499694824
+      },
+      {
+        "start": 7.54,
+        "end": 8.08,
+        "word": " websites,",
+        "probability": 0.9679291248321533
+      },
+      {
+        "start": 8.74,
+        "end": 8.92,
+        "word": " then",
+        "probability": 0.9503529667854309
+      },
+      {
+        "start": 8.92,
+        "end": 9.16,
+        "word": " writing",
+        "probability": 0.9862909913063049
+      },
+      {
+        "start": 9.16,
+        "end": 9.5,
+        "word": " answers",
+        "probability": 0.8603683114051819
+      },
+      {
+        "start": 9.5,
+        "end": 9.94,
+        "word": " for",
+        "probability": 0.9939117431640625
+      },
+      {
+        "start": 9.94,
+        "end": 10.14,
+        "word": " each",
+        "probability": 0.9986315369606018
+      },
+      {
+        "start": 10.14,
+        "end": 10.52,
+        "word": " role.",
+        "probability": 0.9653953909873962
+      },
+      {
+        "start": 11.32,
+        "end": 11.8,
+        "word": " Screenmate",
+        "probability": 0.9868992269039154
+      },
+      {
+        "start": 11.8,
+        "end": 12.06,
+        "word": " helps",
+        "probability": 0.8996741771697998
+      },
+      {
+        "start": 12.06,
+        "end": 12.34,
+        "word": " to",
+        "probability": 0.7613482475280762
+      },
+      {
+        "start": 12.34,
+        "end": 12.44,
+        "word": " do",
+        "probability": 0.9877523183822632
+      },
+      {
+        "start": 12.44,
+        "end": 12.62,
+        "word": " that",
+        "probability": 0.9942628741264343
+      },
+      {
+        "start": 12.62,
+        "end": 12.94,
+        "word": " directly",
+        "probability": 0.9903325438499451
+      },
+      {
+        "start": 12.94,
+        "end": 13.34,
+        "word": " on",
+        "probability": 0.9889047741889954
+      },
+      {
+        "start": 13.34,
+        "end": 13.48,
+        "word": " the",
+        "probability": 0.994860827922821
+      },
+      {
+        "start": 13.48,
+        "end": 13.76,
+        "word": " application",
+        "probability": 0.9086994528770447
+      },
+      {
+        "start": 13.76,
+        "end": 14.26,
+        "word": " page.",
+        "probability": 0.9969327449798584
+      },
+      {
+        "start": 15.22,
+        "end": 15.82,
+        "word": " Screenmate",
+        "probability": 0.9822899103164673
+      },
+      {
+        "start": 15.82,
+        "end": 16.08,
+        "word": " uses",
+        "probability": 0.9773552417755127
+      },
+      {
+        "start": 16.08,
+        "end": 16.34,
+        "word": " your",
+        "probability": 0.9686580896377563
+      },
+      {
+        "start": 16.34,
+        "end": 16.56,
+        "word": " saved",
+        "probability": 0.5342782139778137
+      },
+      {
+        "start": 16.56,
+        "end": 16.94,
+        "word": " background",
+        "probability": 0.9818468689918518
+      },
+      {
+        "start": 16.94,
+        "end": 17.3,
+        "word": " to",
+        "probability": 0.9886243343353271
+      },
+      {
+        "start": 17.3,
+        "end": 17.5,
+        "word": " fill",
+        "probability": 0.8396775722503662
+      },
+      {
+        "start": 17.5,
+        "end": 18.0,
+        "word": " forms",
+        "probability": 0.9808324575424194
+      },
+      {
+        "start": 18.0,
+        "end": 18.42,
+        "word": " and",
+        "probability": 0.9858188629150391
+      },
+      {
+        "start": 18.42,
+        "end": 18.62,
+        "word": " draft",
+        "probability": 0.9943249821662903
+      },
+      {
+        "start": 18.62,
+        "end": 19.2,
+        "word": " answers.",
+        "probability": 0.9940817952156067
+      },
+      {
+        "start": 21.86,
+        "end": 22.58,
+        "word": " It",
+        "probability": 0.9813989996910095
+      },
+      {
+        "start": 22.58,
+        "end": 22.82,
+        "word": " checks",
+        "probability": 0.9579251408576965
+      },
+      {
+        "start": 22.82,
+        "end": 23.16,
+        "word": " that",
+        "probability": 0.9878036975860596
+      },
+      {
+        "start": 23.16,
+        "end": 23.94,
+        "word": " changes",
+        "probability": 0.9474412798881531
+      },
+      {
+        "start": 23.94,
+        "end": 24.7,
+        "word": " actually",
+        "probability": 0.9009890556335449
+      },
+      {
+        "start": 24.7,
+        "end": 24.84,
+        "word": " went",
+        "probability": 0.9142404794692993
+      },
+      {
+        "start": 24.84,
+        "end": 25.2,
+        "word": " through.",
+        "probability": 0.9984018206596375
+      },
+      {
+        "start": 27.3,
+        "end": 28.02,
+        "word": " While",
+        "probability": 0.9378955364227295
+      },
+      {
+        "start": 28.02,
+        "end": 28.42,
+        "word": " leaving",
+        "probability": 0.9925428628921509
+      },
+      {
+        "start": 28.42,
+        "end": 28.82,
+        "word": " personal",
+        "probability": 0.9732000827789307
+      },
+      {
+        "start": 28.82,
+        "end": 29.28,
+        "word": " decisions",
+        "probability": 0.9678117632865906
+      },
+      {
+        "start": 29.28,
+        "end": 29.82,
+        "word": " and",
+        "probability": 0.886756956577301
+      }
+    ]
+  },
+  {
+    "start": 29.82,
+    "end": 38.64,
+    "text": " final submissions to you. I want to make applying less repetitive while keeping",
+    "words": [
+      {
+        "start": 29.82,
+        "end": 30.38,
+        "word": " final",
+        "probability": 0.1282907873392105
+      },
+      {
+        "start": 30.38,
+        "end": 30.76,
+        "word": " submissions",
+        "probability": 0.9449232220649719
+      },
+      {
+        "start": 30.76,
+        "end": 31.12,
+        "word": " to",
+        "probability": 0.9865874648094177
+      },
+      {
+        "start": 31.12,
+        "end": 31.34,
+        "word": " you.",
+        "probability": 0.992834210395813
+      },
+      {
+        "start": 34.16,
+        "end": 34.46,
+        "word": " I",
+        "probability": 0.954013466835022
+      },
+      {
+        "start": 34.46,
+        "end": 34.7,
+        "word": " want",
+        "probability": 0.9853105545043945
+      },
+      {
+        "start": 34.7,
+        "end": 34.88,
+        "word": " to",
+        "probability": 0.9959608912467957
+      },
+      {
+        "start": 34.88,
+        "end": 35.34,
+        "word": " make",
+        "probability": 0.8146200776100159
+      },
+      {
+        "start": 35.34,
+        "end": 35.98,
+        "word": " applying",
+        "probability": 0.9871438145637512
+      },
+      {
+        "start": 35.98,
+        "end": 36.42,
+        "word": " less",
+        "probability": 0.9955075979232788
+      },
+      {
+        "start": 36.42,
+        "end": 36.74,
+        "word": " repetitive",
+        "probability": 0.715632975101471
+      },
+      {
+        "start": 36.74,
+        "end": 38.12,
+        "word": " while",
+        "probability": 0.909212589263916
+      },
+      {
+        "start": 38.12,
+        "end": 38.64,
+        "word": " keeping",
+        "probability": 0.9955982565879822
+      }
+    ]
+  },
+  {
+    "start": 38.64,
+    "end": 40.94,
+    "text": " people in control of what they said.",
+    "words": [
+      {
+        "start": 38.64,
+        "end": 39.04,
+        "word": " people",
+        "probability": 0.9888744354248047
+      },
+      {
+        "start": 39.04,
+        "end": 39.36,
+        "word": " in",
+        "probability": 0.9953990578651428
+      },
+      {
+        "start": 39.36,
+        "end": 39.64,
+        "word": " control",
+        "probability": 0.99605393409729
+      },
+      {
+        "start": 39.64,
+        "end": 40.06,
+        "word": " of",
+        "probability": 0.9937282800674438
+      },
+      {
+        "start": 40.06,
+        "end": 40.34,
+        "word": " what",
+        "probability": 0.9934188723564148
+      },
+      {
+        "start": 40.34,
+        "end": 40.6,
+        "word": " they",
+        "probability": 0.9912009239196777
+      },
+      {
+        "start": 40.6,
+        "end": 40.94,
+        "word": " said.",
+        "probability": 0.24930135905742645
+      }
+    ]
+  }
+]

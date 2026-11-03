@@ -1,0 +1,42 @@
+[
+  {
+    "id": "01",
+    "title": "Read the application",
+    "caption": "See what the form needs, alongside the assistant.",
+    "start": 7.5,
+    "end": 44.0,
+    "duration": 14
+  },
+  {
+    "id": "02",
+    "title": "Fill saved details",
+    "caption": "Use profile facts and check each change on the page.",
+    "start": 44.0,
+    "end": 60.0,
+    "duration": 18
+  },
+  {
+    "id": "03",
+    "title": "Continue through the form",
+    "caption": "Read the next step and draft role-specific answers.",
+    "start": 60.0,
+    "end": 84.0,
+    "duration": 20
+  },
+  {
+    "id": "04",
+    "title": "Keep personal decisions with the user",
+    "caption": "Use saved preferences and ask for missing choices.",
+    "start": 84.0,
+    "end": 99.0,
+    "duration": 22
+  },
+  {
+    "id": "05",
+    "title": "Review before submission",
+    "caption": "The Submit button remains yours.",
+    "start": 99.0,
+    "end": 104.0,
+    "duration": 13
+  }
+]

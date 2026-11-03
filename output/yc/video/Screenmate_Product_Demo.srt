@@ -1,0 +1,35 @@
+1
+00:00:00,000 --> 00:00:03,900
+Hi, I'm Viren Chauhan and I'm building Screenmate.
+
+2
+00:00:04,230 --> 00:00:07,470
+Applying for jobs means entering the same information into different
+
+3
+00:00:07,470 --> 00:00:10,550
+websites, then writing answers for each role.
+
+4
+00:00:11,240 --> 00:00:14,260
+Screenmate helps to do that directly on the application page.
+
+5
+00:00:15,700 --> 00:00:19,140
+uses your saved background to fill forms and draft answers.
+
+6
+00:00:22,260 --> 00:00:25,140
+It checks that changes actually went through
+
+7
+00:00:27,790 --> 00:00:31,250
+leaving personal decisions and final submissions to you.
+
+8
+00:00:34,220 --> 00:00:37,880
+want to make applying less repetitive while
+
+9
+00:00:37,880 --> 00:00:40,820
+keeping people in control of what they send.

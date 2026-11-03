@@ -1,0 +1,19 @@
+﻿[Script Info]
+ScriptType: v4.00+
+PlayResX: 1920
+PlayResY: 1080
+WrapStyle: 0
+[V4+ Styles]
+Format: Name,Fontname,Fontsize,PrimaryColour,SecondaryColour,OutlineColour,BackColour,Bold,Italic,Underline,StrikeOut,ScaleX,ScaleY,Spacing,Angle,BorderStyle,Outline,Shadow,Alignment,MarginL,MarginR,MarginV,Encoding
+Style: Default,Segoe UI,33,&H00FFFFFF,&H000000FF,&H00101017,&H00101017,0,0,0,0,100,100,0,0,1,1,0,2,80,80,29,1
+[Events]
+Format: Layer,Start,End,Style,Name,MarginL,MarginR,MarginV,Effect,Text
+Dialogue: 0,0:00:00.00,0:00:03.90,Default,,0,0,0,,Hi, I'm Viren Chauhan and I'm building Screenmate.
+Dialogue: 0,0:00:04.23,0:00:07.47,Default,,0,0,0,,Applying for jobs means entering the same information into different
+Dialogue: 0,0:00:07.47,0:00:10.55,Default,,0,0,0,,websites, then writing answers for each role.
+Dialogue: 0,0:00:11.24,0:00:14.26,Default,,0,0,0,,Screenmate helps to do that directly on the application page.
+Dialogue: 0,0:00:15.70,0:00:19.14,Default,,0,0,0,,uses your saved background to fill forms and draft answers.
+Dialogue: 0,0:00:22.26,0:00:25.14,Default,,0,0,0,,It checks that changes actually went through
+Dialogue: 0,0:00:27.79,0:00:31.25,Default,,0,0,0,,leaving personal decisions and final submissions to you.
+Dialogue: 0,0:00:34.22,0:00:37.88,Default,,0,0,0,,want to make applying less repetitive while
+Dialogue: 0,0:00:37.88,0:00:40.82,Default,,0,0,0,,keeping people in control of what they send.

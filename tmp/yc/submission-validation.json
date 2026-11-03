@@ -1,0 +1,100 @@
+{
+  "status": "Final videos ready; application requires founder and business facts",
+  "archive": "C:\\Users\\chauh\\OneDrive\\Documents\\GitHub\\SCREENMATE\\output\\Screenmate_YC_Submission_Package.zip",
+  "archive_bytes": 18901374,
+  "archive_integrity": "passed",
+  "pdf_visual_review": "passed",
+  "caption_timing_checks": "passed",
+  "video_decode_checks": "passed",
+  "founder": {
+    "seconds": 59.9,
+    "size": "832x464",
+    "fps": 30,
+    "integrated_lufs": -16.82,
+    "true_peak_dbtp": -1.99
+  },
+  "product_demo": {
+    "seconds": 41.9,
+    "size": "1920x1080",
+    "fps": 30,
+    "integrated_lufs": -16.91,
+    "true_peak_dbtp": -1.99
+  },
+  "files": [
+    {
+      "file": "START_HERE.md",
+      "bytes": 3564,
+      "sha256": "e6c15877cd2ad4020c9fc9ad141b001223686a8f573672647247e6ad4ef2856c"
+    },
+    {
+      "file": "Submission_Copy.md",
+      "bytes": 3304,
+      "sha256": "8c09963af15f304fc4ff4faa173c8217595ecd53327457612e5c37cefbeeaa10"
+    },
+    {
+      "file": "Application_Answers.md",
+      "bytes": 10443,
+      "sha256": "36489f7369a8f0e883ce0140aff39f6032cece8470dc0ffe9f15ca9cbf69c92a"
+    },
+    {
+      "file": "Founder_Facts.md",
+      "bytes": 1406,
+      "sha256": "77009ac342ff85b7401d5f13065735aa3a747581c027140f2a70a671b77111eb"
+    },
+    {
+      "file": "Video_Guide.md",
+      "bytes": 2586,
+      "sha256": "017783387ef65f968ffe44827e796c9da08bcce0c80c84e6b5dc25d50466815b"
+    },
+    {
+      "file": "Evidence_and_Sources.md",
+      "bytes": 3107,
+      "sha256": "6b033cd3d8f9bf72fdaf0d94bb9c526011824f581991930d9f13956b01299497"
+    },
+    {
+      "file": "Recognition.md",
+      "bytes": 1367,
+      "sha256": "892db930b8fdc38c3f57da6d452f52ff634a39699845ad49ea6fc7f60998fe5e"
+    },
+    {
+      "file": "Screenmate_YC_Workbook.pdf",
+      "bytes": 23051,
+      "sha256": "8710faa1fb342d903fe415cc5f956b55092ac4e0a873e09475fa7e5edfd73bfe"
+    },
+    {
+      "file": "Screenmate_Overview.pdf",
+      "bytes": 3336,
+      "sha256": "fb95e20e373d4e9285ba07a463028cffe3a8a347093c50c46f6cc1b5ba994162"
+    },
+    {
+      "file": "video/Screenmate_Founder_YC.mp4",
+      "bytes": 5852539,
+      "sha256": "32a41b8ae534bb2920dcd9477e944d59d4a8d882deeaf2ec8d868d9743a054ac"
+    },
+    {
+      "file": "video/Screenmate_Product_Demo_YC.mp4",
+      "bytes": 13092740,
+      "sha256": "dadc7dc03307dd716e0126c884ffd354018c181aa0eafe1b0f79048bb255c7d2"
+    },
+    {
+      "file": "video/Screenmate_Founder_YC.srt",
+      "bytes": 1453,
+      "sha256": "a3605855854dec3a94911752e4764fccb0bc404608d19a205f1847911946921f"
+    },
+    {
+      "file": "video/Screenmate_Product_Demo.srt",
+      "bytes": 810,
+      "sha256": "35e391382aad53510247e11ac905e0c1cdd1e4a37eacea1cff3b3247896aa28e"
+    },
+    {
+      "file": "video/Screenmate_Founder_Transcript.txt",
+      "bytes": 857,
+      "sha256": "08ad3fff1eb915ad733d1d2f3f3f02847dbc5c1dd693f4858e3431af1d788e84"
+    },
+    {
+      "file": "video/EDIT_NOTES.md",
+      "bytes": 2412,
+      "sha256": "d7e8a512ec3cc93293c10b569da9fc75c71502e6753ace7098ba3fe38d32bcbb"
+    }
+  ]
+}

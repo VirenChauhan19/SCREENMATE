@@ -1,0 +1,11 @@
+This is Screenmate. It helps you fill out job applications using the background you've already saved. I'll show you the extension working on a sample application.
+
+When I open the panel, Screenmate reads the fields on the page and works out what's missing. The form stays right here, alongside the assistant.
+
+It fills details like your name, location, and education from your profile. After each change, it checks the page to see whether the value actually went through. You can follow what it's doing in the panel.
+
+As it moves to the next step, it reads the new fields. For written questions, it uses your background and the role's description to draft an answer. You can review and change that wording.
+
+Some questions still need you. Here, saved preferences handle some personal questions, and Screenmate asks for a choice it doesn't have. The person applying stays in control of those decisions.
+
+At the end, the application is still yours to review. Screenmate stops before submission. The goal is to save the repeated typing while keeping you involved in the answers that matter.

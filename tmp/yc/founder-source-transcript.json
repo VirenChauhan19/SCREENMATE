@@ -1,0 +1,873 @@
+[
+  {
+    "start": 0.0,
+    "end": 29.16,
+    "text": " Hi, I'm Viren Chauhan and I'm building Screenmate. Applying for job means entering the same information into different websites, then writing answers for each role. Screenmate helps to do that directly on the application page. I build the prototype at the AI Tinkerers agents Everywhere Hackathon with openAI. It plays third globally out of 687 projects. I represented Atlanta the only US chapter among the top three.",
+    "words": [
+      {
+        "start": 0.0,
+        "end": 0.92,
+        "word": " Hi,",
+        "probability": 0.7853270769119263
+      },
+      {
+        "start": 1.22,
+        "end": 1.34,
+        "word": " I'm",
+        "probability": 0.8313016593456268
+      },
+      {
+        "start": 1.34,
+        "end": 1.54,
+        "word": " Viren",
+        "probability": 0.18262468744069338
+      },
+      {
+        "start": 1.54,
+        "end": 2.12,
+        "word": " Chauhan",
+        "probability": 0.28842644346150337
+      },
+      {
+        "start": 2.12,
+        "end": 2.62,
+        "word": " and",
+        "probability": 0.7695763111114502
+      },
+      {
+        "start": 2.62,
+        "end": 2.94,
+        "word": " I'm",
+        "probability": 0.9246076941490173
+      },
+      {
+        "start": 2.94,
+        "end": 3.14,
+        "word": " building",
+        "probability": 0.6101276874542236
+      },
+      {
+        "start": 3.14,
+        "end": 3.78,
+        "word": " Screenmate.",
+        "probability": 0.3295420906506479
+      },
+      {
+        "start": 4.46,
+        "end": 4.78,
+        "word": " Applying",
+        "probability": 0.9787309169769287
+      },
+      {
+        "start": 4.78,
+        "end": 5.02,
+        "word": " for",
+        "probability": 0.9846038222312927
+      },
+      {
+        "start": 5.02,
+        "end": 5.22,
+        "word": " job",
+        "probability": 0.6748279333114624
+      },
+      {
+        "start": 5.22,
+        "end": 5.56,
+        "word": " means",
+        "probability": 0.9794958233833313
+      },
+      {
+        "start": 5.56,
+        "end": 5.94,
+        "word": " entering",
+        "probability": 0.9991136193275452
+      },
+      {
+        "start": 5.94,
+        "end": 6.16,
+        "word": " the",
+        "probability": 0.9836534857749939
+      },
+      {
+        "start": 6.16,
+        "end": 6.4,
+        "word": " same",
+        "probability": 0.9964863061904907
+      },
+      {
+        "start": 6.4,
+        "end": 6.7,
+        "word": " information",
+        "probability": 0.9874055981636047
+      },
+      {
+        "start": 6.7,
+        "end": 7.4,
+        "word": " into",
+        "probability": 0.9601194858551025
+      },
+      {
+        "start": 7.4,
+        "end": 7.7,
+        "word": " different",
+        "probability": 0.9925568103790283
+      },
+      {
+        "start": 7.7,
+        "end": 8.24,
+        "word": " websites,",
+        "probability": 0.9745690822601318
+      },
+      {
+        "start": 8.98,
+        "end": 9.08,
+        "word": " then",
+        "probability": 0.9370710849761963
+      },
+      {
+        "start": 9.08,
+        "end": 9.32,
+        "word": " writing",
+        "probability": 0.9907869696617126
+      },
+      {
+        "start": 9.32,
+        "end": 9.66,
+        "word": " answers",
+        "probability": 0.9468579888343811
+      },
+      {
+        "start": 9.66,
+        "end": 10.1,
+        "word": " for",
+        "probability": 0.9927517175674438
+      },
+      {
+        "start": 10.1,
+        "end": 10.3,
+        "word": " each",
+        "probability": 0.9976069927215576
+      },
+      {
+        "start": 10.3,
+        "end": 10.66,
+        "word": " role.",
+        "probability": 0.9783017635345459
+      },
+      {
+        "start": 11.32,
+        "end": 11.78,
+        "word": " Screenmate",
+        "probability": 0.9858734905719757
+      },
+      {
+        "start": 11.78,
+        "end": 12.04,
+        "word": " helps",
+        "probability": 0.9401702284812927
+      },
+      {
+        "start": 12.04,
+        "end": 12.32,
+        "word": " to",
+        "probability": 0.7475934028625488
+      },
+      {
+        "start": 12.32,
+        "end": 12.4,
+        "word": " do",
+        "probability": 0.9942783117294312
+      },
+      {
+        "start": 12.4,
+        "end": 12.58,
+        "word": " that",
+        "probability": 0.9942487478256226
+      },
+      {
+        "start": 12.58,
+        "end": 12.92,
+        "word": " directly",
+        "probability": 0.9931442737579346
+      },
+      {
+        "start": 12.92,
+        "end": 13.32,
+        "word": " on",
+        "probability": 0.9903253316879272
+      },
+      {
+        "start": 13.32,
+        "end": 13.46,
+        "word": " the",
+        "probability": 0.9950933456420898
+      },
+      {
+        "start": 13.46,
+        "end": 13.7,
+        "word": " application",
+        "probability": 0.914435625076294
+      },
+      {
+        "start": 13.7,
+        "end": 14.22,
+        "word": " page.",
+        "probability": 0.9971398115158081
+      },
+      {
+        "start": 15.26,
+        "end": 15.26,
+        "word": " I",
+        "probability": 0.9900140762329102
+      },
+      {
+        "start": 15.26,
+        "end": 15.48,
+        "word": " build",
+        "probability": 0.38752469420433044
+      },
+      {
+        "start": 15.48,
+        "end": 15.66,
+        "word": " the",
+        "probability": 0.8547574281692505
+      },
+      {
+        "start": 15.66,
+        "end": 16.0,
+        "word": " prototype",
+        "probability": 0.9954089522361755
+      },
+      {
+        "start": 16.0,
+        "end": 16.44,
+        "word": " at",
+        "probability": 0.9837099313735962
+      },
+      {
+        "start": 16.44,
+        "end": 16.62,
+        "word": " the",
+        "probability": 0.9660395383834839
+      },
+      {
+        "start": 16.62,
+        "end": 16.86,
+        "word": " AI",
+        "probability": 0.8338863253593445
+      },
+      {
+        "start": 16.86,
+        "end": 17.38,
+        "word": " Tinkerers",
+        "probability": 0.13089813804253936
+      },
+      {
+        "start": 17.38,
+        "end": 17.68,
+        "word": " agents",
+        "probability": 0.737549901008606
+      },
+      {
+        "start": 17.68,
+        "end": 18.08,
+        "word": " Everywhere",
+        "probability": 0.0016727634938433766
+      },
+      {
+        "start": 18.08,
+        "end": 18.66,
+        "word": " Hackathon",
+        "probability": 0.8214883208274841
+      },
+      {
+        "start": 18.66,
+        "end": 18.98,
+        "word": " with",
+        "probability": 0.9511728286743164
+      },
+      {
+        "start": 18.98,
+        "end": 19.7,
+        "word": " openAI.",
+        "probability": 0.2941405028104782
+      },
+      {
+        "start": 20.6,
+        "end": 20.8,
+        "word": " It",
+        "probability": 0.9747500419616699
+      },
+      {
+        "start": 20.8,
+        "end": 21.04,
+        "word": " plays",
+        "probability": 0.884899377822876
+      },
+      {
+        "start": 21.04,
+        "end": 21.34,
+        "word": " third",
+        "probability": 0.3648765981197357
+      },
+      {
+        "start": 21.34,
+        "end": 21.8,
+        "word": " globally",
+        "probability": 0.9954040050506592
+      },
+      {
+        "start": 21.8,
+        "end": 22.3,
+        "word": " out",
+        "probability": 0.73409104347229
+      },
+      {
+        "start": 22.3,
+        "end": 22.5,
+        "word": " of",
+        "probability": 0.9962255954742432
+      },
+      {
+        "start": 22.5,
+        "end": 23.02,
+        "word": " 687",
+        "probability": 0.943556398153305
+      },
+      {
+        "start": 23.02,
+        "end": 23.58,
+        "word": " projects.",
+        "probability": 0.9728959798812866
+      },
+      {
+        "start": 24.38,
+        "end": 24.46,
+        "word": " I",
+        "probability": 0.9948956370353699
+      },
+      {
+        "start": 24.46,
+        "end": 24.78,
+        "word": " represented",
+        "probability": 0.8086308836936951
+      },
+      {
+        "start": 24.78,
+        "end": 25.36,
+        "word": " Atlanta",
+        "probability": 0.9177879095077515
+      },
+      {
+        "start": 25.36,
+        "end": 25.84,
+        "word": " the",
+        "probability": 0.6151942610740662
+      },
+      {
+        "start": 25.84,
+        "end": 26.24,
+        "word": " only",
+        "probability": 0.9911050200462341
+      },
+      {
+        "start": 26.24,
+        "end": 26.74,
+        "word": " US",
+        "probability": 0.8226882219314575
+      },
+      {
+        "start": 26.74,
+        "end": 27.86,
+        "word": " chapter",
+        "probability": 0.8896297216415405
+      },
+      {
+        "start": 27.86,
+        "end": 28.46,
+        "word": " among",
+        "probability": 0.9907388687133789
+      },
+      {
+        "start": 28.46,
+        "end": 28.64,
+        "word": " the",
+        "probability": 0.9926210641860962
+      },
+      {
+        "start": 28.64,
+        "end": 28.82,
+        "word": " top",
+        "probability": 0.9481136202812195
+      },
+      {
+        "start": 28.82,
+        "end": 29.16,
+        "word": " three.",
+        "probability": 0.8242987394332886
+      }
+    ]
+  },
+  {
+    "start": 29.16,
+    "end": 33.7,
+    "text": " Screenmate uses your safe background to fill forms and draft answers.",
+    "words": [
+      {
+        "start": 29.16,
+        "end": 30.38,
+        "word": " Screenmate",
+        "probability": 0.2588227652013302
+      },
+      {
+        "start": 30.38,
+        "end": 30.62,
+        "word": " uses",
+        "probability": 0.9546250104904175
+      },
+      {
+        "start": 30.62,
+        "end": 30.9,
+        "word": " your",
+        "probability": 0.9518279433250427
+      },
+      {
+        "start": 30.9,
+        "end": 31.1,
+        "word": " safe",
+        "probability": 0.29421693086624146
+      },
+      {
+        "start": 31.1,
+        "end": 31.46,
+        "word": " background",
+        "probability": 0.8940945863723755
+      },
+      {
+        "start": 31.46,
+        "end": 31.84,
+        "word": " to",
+        "probability": 0.977013885974884
+      },
+      {
+        "start": 31.84,
+        "end": 32.04,
+        "word": " fill",
+        "probability": 0.7848886847496033
+      },
+      {
+        "start": 32.04,
+        "end": 32.56,
+        "word": " forms",
+        "probability": 0.9841307997703552
+      },
+      {
+        "start": 32.56,
+        "end": 32.96,
+        "word": " and",
+        "probability": 0.9635121822357178
+      },
+      {
+        "start": 32.96,
+        "end": 33.14,
+        "word": " draft",
+        "probability": 0.9901554584503174
+      },
+      {
+        "start": 33.14,
+        "end": 33.7,
+        "word": " answers.",
+        "probability": 0.9835134148597717
+      }
+    ]
+  },
+  {
+    "start": 34.36,
+    "end": 40.24,
+    "text": " It checks that changes actually went through while leaving personal decisions and final",
+    "words": [
+      {
+        "start": 34.36,
+        "end": 34.5,
+        "word": " It",
+        "probability": 0.9575141072273254
+      },
+      {
+        "start": 34.5,
+        "end": 34.74,
+        "word": " checks",
+        "probability": 0.9502803087234497
+      },
+      {
+        "start": 34.74,
+        "end": 35.12,
+        "word": " that",
+        "probability": 0.9587184190750122
+      },
+      {
+        "start": 35.12,
+        "end": 35.86,
+        "word": " changes",
+        "probability": 0.907336950302124
+      },
+      {
+        "start": 35.86,
+        "end": 36.62,
+        "word": " actually",
+        "probability": 0.655306339263916
+      },
+      {
+        "start": 36.62,
+        "end": 36.78,
+        "word": " went",
+        "probability": 0.8067911863327026
+      },
+      {
+        "start": 36.78,
+        "end": 37.12,
+        "word": " through",
+        "probability": 0.9952406883239746
+      },
+      {
+        "start": 37.12,
+        "end": 37.94,
+        "word": " while",
+        "probability": 0.6200742721557617
+      },
+      {
+        "start": 37.94,
+        "end": 38.36,
+        "word": " leaving",
+        "probability": 0.9920791983604431
+      },
+      {
+        "start": 38.36,
+        "end": 38.72,
+        "word": " personal",
+        "probability": 0.9887133836746216
+      },
+      {
+        "start": 38.72,
+        "end": 39.24,
+        "word": " decisions",
+        "probability": 0.951410710811615
+      },
+      {
+        "start": 39.24,
+        "end": 39.72,
+        "word": " and",
+        "probability": 0.9717960953712463
+      },
+      {
+        "start": 39.72,
+        "end": 40.24,
+        "word": " final",
+        "probability": 0.8185062408447266
+      }
+    ]
+  },
+  {
+    "start": 40.24,
+    "end": 41.28,
+    "text": " submissions to you.",
+    "words": [
+      {
+        "start": 40.24,
+        "end": 40.72,
+        "word": " submissions",
+        "probability": 0.9575839638710022
+      },
+      {
+        "start": 40.72,
+        "end": 41.08,
+        "word": " to",
+        "probability": 0.9866204261779785
+      },
+      {
+        "start": 41.08,
+        "end": 41.28,
+        "word": " you.",
+        "probability": 0.9965457320213318
+      }
+    ]
+  },
+  {
+    "start": 42.02,
+    "end": 48.2,
+    "text": " The next step is testing it with job seekers on real applications, measuring where it saves",
+    "words": [
+      {
+        "start": 42.02,
+        "end": 42.22,
+        "word": " The",
+        "probability": 0.9676210880279541
+      },
+      {
+        "start": 42.22,
+        "end": 42.4,
+        "word": " next",
+        "probability": 0.9976517558097839
+      },
+      {
+        "start": 42.4,
+        "end": 42.68,
+        "word": " step",
+        "probability": 0.9884159564971924
+      },
+      {
+        "start": 42.68,
+        "end": 42.84,
+        "word": " is",
+        "probability": 0.9919780492782593
+      },
+      {
+        "start": 42.84,
+        "end": 43.12,
+        "word": " testing",
+        "probability": 0.984298825263977
+      },
+      {
+        "start": 43.12,
+        "end": 43.48,
+        "word": " it",
+        "probability": 0.9881088137626648
+      },
+      {
+        "start": 43.48,
+        "end": 43.76,
+        "word": " with",
+        "probability": 0.995846688747406
+      },
+      {
+        "start": 43.76,
+        "end": 44.04,
+        "word": " job",
+        "probability": 0.9113780856132507
+      },
+      {
+        "start": 44.04,
+        "end": 44.5,
+        "word": " seekers",
+        "probability": 0.9735896587371826
+      },
+      {
+        "start": 44.5,
+        "end": 45.12,
+        "word": " on",
+        "probability": 0.8046128749847412
+      },
+      {
+        "start": 45.12,
+        "end": 45.36,
+        "word": " real",
+        "probability": 0.8992042541503906
+      },
+      {
+        "start": 45.36,
+        "end": 45.9,
+        "word": " applications,",
+        "probability": 0.9739180207252502
+      },
+      {
+        "start": 46.06,
+        "end": 47.04,
+        "word": " measuring",
+        "probability": 0.9858261942863464
+      },
+      {
+        "start": 47.04,
+        "end": 47.62,
+        "word": " where",
+        "probability": 0.9947761297225952
+      },
+      {
+        "start": 47.62,
+        "end": 47.96,
+        "word": " it",
+        "probability": 0.9831246137619019
+      },
+      {
+        "start": 47.96,
+        "end": 48.2,
+        "word": " saves",
+        "probability": 0.9819274544715881
+      }
+    ]
+  },
+  {
+    "start": 48.2,
+    "end": 52.42,
+    "text": " time, fixing what breaks and understanding what makes people come back.",
+    "words": [
+      {
+        "start": 48.2,
+        "end": 48.78,
+        "word": " time,",
+        "probability": 0.9976928234100342
+      },
+      {
+        "start": 49.18,
+        "end": 49.38,
+        "word": " fixing",
+        "probability": 0.9931619167327881
+      },
+      {
+        "start": 49.38,
+        "end": 49.68,
+        "word": " what",
+        "probability": 0.8851369023323059
+      },
+      {
+        "start": 49.68,
+        "end": 49.94,
+        "word": " breaks",
+        "probability": 0.2914503514766693
+      },
+      {
+        "start": 49.94,
+        "end": 50.32,
+        "word": " and",
+        "probability": 0.6896659731864929
+      },
+      {
+        "start": 50.32,
+        "end": 50.68,
+        "word": " understanding",
+        "probability": 0.9926149845123291
+      },
+      {
+        "start": 50.68,
+        "end": 51.16,
+        "word": " what",
+        "probability": 0.9924615025520325
+      },
+      {
+        "start": 51.16,
+        "end": 51.52,
+        "word": " makes",
+        "probability": 0.9940063953399658
+      },
+      {
+        "start": 51.52,
+        "end": 51.92,
+        "word": " people",
+        "probability": 0.9974250793457031
+      },
+      {
+        "start": 51.92,
+        "end": 52.14,
+        "word": " come",
+        "probability": 0.9635740518569946
+      },
+      {
+        "start": 52.14,
+        "end": 52.42,
+        "word": " back.",
+        "probability": 0.998315691947937
+      }
+    ]
+  },
+  {
+    "start": 52.42,
+    "end": 59.72,
+    "text": " I want to make applying less reparative while keeping people in control of what they send.",
+    "words": [
+      {
+        "start": 52.42,
+        "end": 53.24,
+        "word": " I",
+        "probability": 0.8084495663642883
+      },
+      {
+        "start": 53.24,
+        "end": 53.5,
+        "word": " want",
+        "probability": 0.9719731211662292
+      },
+      {
+        "start": 53.5,
+        "end": 53.66,
+        "word": " to",
+        "probability": 0.9909111857414246
+      },
+      {
+        "start": 53.66,
+        "end": 54.12,
+        "word": " make",
+        "probability": 0.757457971572876
+      },
+      {
+        "start": 54.12,
+        "end": 54.72,
+        "word": " applying",
+        "probability": 0.9820980429649353
+      },
+      {
+        "start": 54.72,
+        "end": 55.22,
+        "word": " less",
+        "probability": 0.9965421557426453
+      },
+      {
+        "start": 55.22,
+        "end": 55.8,
+        "word": " reparative",
+        "probability": 0.7132026751836141
+      },
+      {
+        "start": 55.8,
+        "end": 56.9,
+        "word": " while",
+        "probability": 0.9051883816719055
+      },
+      {
+        "start": 56.9,
+        "end": 57.46,
+        "word": " keeping",
+        "probability": 0.9907398223876953
+      },
+      {
+        "start": 57.46,
+        "end": 57.8,
+        "word": " people",
+        "probability": 0.9578774571418762
+      },
+      {
+        "start": 57.8,
+        "end": 58.1,
+        "word": " in",
+        "probability": 0.9923496246337891
+      },
+      {
+        "start": 58.1,
+        "end": 58.42,
+        "word": " control",
+        "probability": 0.9944150447845459
+      },
+      {
+        "start": 58.42,
+        "end": 58.78,
+        "word": " of",
+        "probability": 0.9889737367630005
+      },
+      {
+        "start": 58.78,
+        "end": 59.1,
+        "word": " what",
+        "probability": 0.99236661195755
+      },
+      {
+        "start": 59.1,
+        "end": 59.34,
+        "word": " they",
+        "probability": 0.9932072758674622
+      },
+      {
+        "start": 59.34,
+        "end": 59.72,
+        "word": " send.",
+        "probability": 0.8160815238952637
+      }
+    ]
+  }
+]
