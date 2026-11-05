@@ -42,7 +42,9 @@
     if (el.closest?.('[hidden], [inert], [aria-hidden="true"], [aria-disabled="true"]')) return false;
     const host = el.getRootNode()?.host;
     if (host && !isVisible(host)) return false;
-    if (el.disabled || el.readOnly) return false;
+    // :disabled includes inherited fieldset disabling and preserves the first
+    // legend exception; the element's .disabled property alone does neither.
+    if (el.disabled || el.matches?.(':disabled') || el.readOnly) return false;
     if (el.getAttribute("aria-hidden") === "true") return false;
     if (el.getAttribute("aria-disabled") === "true") return false;
     const style = window.getComputedStyle(el);
@@ -332,7 +334,7 @@
 
     if (el.type === "radio" && el.name) {
       return radioMembers(el)
-        .filter((r) => !r.disabled)
+        .filter(isVisible)
         .map((r) => labelFor(r))
         .filter(Boolean)
         .slice(0, 300);
@@ -340,6 +342,7 @@
 
     if (role === "radiogroup") {
       return Array.from(el.querySelectorAll("[role=radio]"))
+        .filter(isVisible)
         .map((r) => cleanText(r.getAttribute("aria-label") || r.textContent))
         .filter(Boolean)
         .slice(0, 300);
@@ -384,11 +387,11 @@
     }
     if (t === "radio") {
       if (!el.name) return el.checked ? labelFor(el) : "";
-      const checked = radioMembers(el).find((r) => r.checked);
+      const checked = radioMembers(el).find((r) => r.checked && isVisible(r));
       return checked ? labelFor(checked) : "";
     }
     if (role === "radiogroup") {
-      const checked = el.querySelector('[role=radio][aria-checked="true"]');
+      const checked = Array.from(el.querySelectorAll('[role=radio][aria-checked="true"]')).find(isVisible);
       return checked
         ? cleanText(checked.getAttribute("aria-label") || checked.textContent)
         : "";

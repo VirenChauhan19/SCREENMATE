@@ -126,7 +126,7 @@
   function writeRadio(el, value) {
     const group = window.__screenmateScan.radioMembers(el);
     const target = Array.from(group).find(
-      (r) => !r.disabled && norm(window.__screenmateScan.labelFor(r)) === norm(value),
+      (r) => window.__screenmateScan.isVisible(r) && norm(window.__screenmateScan.labelFor(r)) === norm(value),
     );
     if (!target) return { ok: false, reason: `No radio option matching "${value}"` };
     focusQuietly(target);
@@ -204,7 +204,7 @@
   function writeAriaRadioGroup(el, value) {
     const options = Array.from(el.querySelectorAll("[role=radio]"));
     const target = options.find(
-      (o) => norm(o.getAttribute("aria-label") || o.textContent) === norm(value),
+      (o) => window.__screenmateScan.isVisible(o) && norm(o.getAttribute("aria-label") || o.textContent) === norm(value),
     );
     if (!target) return { ok: false, reason: `No option matching "${value}"` };
     focusQuietly(target);
